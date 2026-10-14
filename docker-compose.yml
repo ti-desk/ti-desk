@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    container_name: tidesk-postgres
+    environment:
+      POSTGRES_DB: tidesk_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tidesk_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mail:
+    image: axllent/mailpit
+    container_name: tidesk-mailpit
+    ports:
+      - "8025:8025" # Interfaz web de correo
+      - "1025:1025" # Servidor SMTP para Spring Boot
+    restart: unless-stopped
+
+volumes:
+  pgdata:
