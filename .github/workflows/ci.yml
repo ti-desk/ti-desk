@@ -36,5 +36,12 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
-      - name: Compilar y ejecutar pruebas con Maven
+      - name: Compilar, probar y verificar Quality Gate (JaCoCo)
         run: mvn -B verify
+
+      - name: Publicar reporte de cobertura JaCoCo
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-report
+          path: target/site/jacoco/

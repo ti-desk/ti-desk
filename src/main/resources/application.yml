@@ -5,6 +5,7 @@ spring:
     url: jdbc:postgresql://localhost:5432/tidesk_db
     username: postgres
     password: postgres
+    driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
       ddl-auto: validate
@@ -18,7 +19,6 @@ spring:
 management:
   endpoints:
     web:
-    # Asegura la exposición de salud y métricas requeridas (Sección 9 y 11)
       exposure:
         include: health, prometheus, info
   endpoint:
