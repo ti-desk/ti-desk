@@ -94,7 +94,7 @@
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>0.8.12</version> <!-- Actualizado para soportar versiones recientes de Java -->
+				<version>0.8.15</version> <!-- Actualizado para soportar versiones recientes de Java -->
 				<executions>
 					<execution>
 						<id>prepare-agent</id>
