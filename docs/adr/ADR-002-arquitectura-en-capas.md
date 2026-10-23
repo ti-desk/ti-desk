@@ -34,6 +34,10 @@ responsabilidades:
 3. Los DTO de entrada se validan con Bean Validation en la capa de
    presentación.
 4. Las transacciones se declaran en la capa de servicio.
+5. Los errores se devuelven en formato ProblemDetail (RFC 9457), con
+   código 409 para transiciones de estado inválidas y 404 cuando el
+   recurso no existe o está oculto para el rol.
+6. Los datos se exponen siempre como DTO; nunca como entidades.
 
 **Estructura de paquetes:** se organiza por funcionalidad bajo
 `mx.edu.tidesk` (`usuario/`, `ticket/`, `seguridad/`, `sla/`, `activo/`,
