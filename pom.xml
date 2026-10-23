@@ -48,6 +48,11 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
+		<!-- NUEVO: Bean Validation (RF-04: 400 con detalle por campo) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-database-postgresql</artifactId>
@@ -130,6 +135,8 @@
 							<excludes>
 								<exclude>**/config/**</exclude>
 								<exclude>**/dto/**</exclude>
+								<!-- NUEVO: la clase de arranque no cuenta para la cobertura -->
+								<exclude>**/*Application.class</exclude>
 							</excludes>
 						</configuration>
 					</execution>
