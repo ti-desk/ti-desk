@@ -1,13 +1,13 @@
-# TI-Desk · Plan de Pruebas v1
+# TI-Desk · Plan de Pruebas v1.1
 
 | Campo | Valor |
 | :--- | :--- |
 | Proyecto | TI-Desk: mesa de ayuda del área de TI |
-| Documento | Plan de pruebas v1 (ticket TID-05) |
+| Documento | Plan de pruebas v1.1 (ticket TID-05) |
 | Responsable | Brenda, Ingeniera de calidad (QA) |
 | Respaldo | Yahir |
 | Hito | Release v0.5.0 (semana 8, parcial) |
-| Versión / fecha | 1.0 · Octubre 2026 |
+| Versión / fecha | 1.1 · 23/Octubre/2026 |
 | Estado | Borrador para revisión del equipo |
 
 ---
@@ -19,14 +19,17 @@ Definir cómo se verificará la calidad de TI-Desk: qué se prueba, con qué her
 
 ### 1.2 Referencias
 - Anteproyecto TI-Desk v1.0 (secciones 7, 8, 12, 13 y 15).
+- Backlog priorizado v1.1 (escenarios por historia de usuario).
 - ISO/IEC 25010 (modelo de calidad del producto).
 - Pirámide de pruebas.
 - Matriz de trazabilidad requisito → prueba (dueña: Melisa).
+- ADR-004: herramienta de análisis estático (SpotBugs y Checkstyle).
 
 ### 1.3 Definiciones
 | Término | Significado |
 | :--- | :--- |
 | RF / RNF | Requisito funcional / no funcional |
+| HU | Historia de usuario del backlog |
 | CP | Caso de prueba |
 | UAT | Pruebas de aceptación de usuario |
 | Quality gate | Condición que, si falla, rompe el build del pipeline |
@@ -79,7 +82,8 @@ Se sigue la pirámide: muchas pruebas rápidas abajo y pocas costosas arriba.
 | Base de datos en pruebas de integración | PostgreSQL 16 vía Testcontainers |
 | Correo | Mailpit (puertos 1025 SMTP y 8025 web) |
 | CI | GitHub Actions (`ci.yml`) |
-| Cobertura | JaCoCo 0.8.12 con umbral en el build |
+| Cobertura | JaCoCo 0.8.15 con umbral en el build |
+| Análisis estático | SpotBugs y Checkstyle en Maven (ADR-004) |
 | Contrato API | Swagger UI / OpenAPI + colección Postman o Bruno |
 | Carga | k6 (Sprint 5) |
 
@@ -93,7 +97,7 @@ Se sigue la pirámide: muchas pruebas rápidas abajo y pocas costosas arriba.
 | :--- | :--- | :--- | :--- | :--- |
 | QG-1 | Compilación y pruebas | 100 % en verde | Alguna falla | Activo |
 | QG-2 | Cobertura de líneas (JaCoCo) | ≥ 60 % parcial; ≥ 80 % en servicios (final) | Por debajo del umbral | Activo al 60 % |
-| QG-3 | Análisis estático | Sin bloqueantes ni críticos | Hay incidencias | Pendiente (SonarCloud o Checkstyle/SpotBugs) |
+| QG-3 | Análisis estático | Sin bloqueantes ni críticos | Hay incidencias | Herramienta decidida (SpotBugs + Checkstyle, ADR-004); pendiente de configurar en `pom.xml` y CI |
 | QG-4 | Dependencias e imagen | Sin vulnerabilidades críticas/altas | Se detecta alguna | En curso (Dependabot, escaneo de secretos, Trivy) |
 | QG-5 | Revisión de código | ≥ 1 aprobación de otro integrante | Sin aprobación | Activo (rama protegida) |
 
@@ -130,7 +134,7 @@ Formato: **Dado / Cuando / Entonces**. Tipo: U = unitaria, S = de rebanada, I = 
 | ID | RF | Caso | Resultado esperado | Tipo |
 | :--- | :--- | :--- | :--- | :--- |
 | CP-001 | RF-01 | Registro con datos válidos | 201; usuario con rol USUARIO; contraseña guardada con BCrypt | I |
-| CP-002 | RF-01 | Registro con correo ya existente | 409 o 400 con ProblemDetail | I |
+| CP-002 | RF-01 | Registro con correo ya existente | 409 con ProblemDetail | I |
 | CP-003 | RF-01 | Registro con correo inválido o campos vacíos | 400 con detalle por campo | S |
 | CP-004 | RF-02 | Login con credenciales correctas | 200 con JWT que expira a los 30 min | I |
 | CP-005 | RF-02 | Login con contraseña incorrecta | 401 | I |
@@ -158,7 +162,10 @@ Formato: **Dado / Cuando / Entonces**. Tipo: U = unitaria, S = de rebanada, I = 
 | CP-022 | RF-08 | Cada transición permitida de la máquina de estados | Cambia el estado y deja registro en historial | U |
 | CP-023 | RF-08 | Transición no permitida (por ejemplo ABIERTO → RESUELTO) | 409 con ProblemDetail que indica la regla | U, I |
 | CP-024 | RF-08 | Estados finales (CERRADO, CANCELADO) | No admiten ninguna transición | U |
-| CP-025 | RF-08 | Transición por un rol no autorizado | 403 | SEG |
+| CP-025 | RF-08 | TECNICO que no tiene el ticket asignado intenta cambiar su estado | 403 | SEG |
+| CP-049 | RF-04 | (HU-04) Crear ticket con un activo que no existe | 404 | I |
+| CP-050 | RF-07 | (HU-07) USUARIO comenta un ticket ajeno | 404 (oculto para el rol); el CP-016 cubre el detalle, este cubre el comentario | SEG |
+| Por confirmar | RF-04 | (HU-04) Crear ticket con un activo dado de baja | 409 (regla en confirmación con Ulises y Melisa; se asigna número de CP al confirmarla) | I |
 
 ### 7.3 SLA (módulo de Fernando)
 
@@ -178,12 +185,19 @@ Formato: **Dado / Cuando / Entonces**. Tipo: U = unitaria, S = de rebanada, I = 
 | ID | RF | Caso | Resultado esperado | Tipo |
 | :--- | :--- | :--- | :--- | :--- |
 | CP-034 | RF-13 | ADMIN da de alta un activo | 201 | I |
-| CP-035 | RF-13 | Etiqueta de inventario duplicada | 409 o 400 | I |
+| CP-035 | RF-13 | Etiqueta de inventario duplicada | 409 | I |
 | CP-036 | RF-13 | Edición de un activo | 200 | I |
-| CP-037 | RF-13 | Baja lógica | El activo queda inactivo y no se borra de la BD | I |
+| CP-037 | RF-13 | Baja lógica | El activo queda en estado BAJA y no se borra de la BD | I |
 | CP-038 | RF-13 | Búsqueda por etiqueta o número de serie | Devuelve el activo correcto | S |
 | CP-039 | RF-13 | TECNICO consulta y trata de crear | Consulta 200; creación 403 | SEG |
 | CP-040 | RF-04 | Ticket ligado a un activo opcional | Se asocia correctamente | I |
+| CP-051 | RF-13 | (HU-09a) Alta de activo con datos inválidos | 400 con detalle por campo | S |
+| CP-052 | RF-13 | (HU-09a) Alta o edición con un responsable que no existe | 404 | I |
+| CP-053 | RF-13 | (HU-09b) Intentar poner el estado BAJA al editar un activo | 400; debe usarse el endpoint de baja | I |
+| CP-054 | RF-13 | (HU-09b) Dar de baja un activo que no existe | 404 | I |
+| CP-055 | RF-13 | (HU-09c) Listado de activos sin filtros y con la opción de incluir BAJA | Sin filtros no muestra los activos en BAJA; al incluirlos, sí | S |
+| CP-056 | RF-13 | (HU-09c) Búsqueda sin resultados | 200 con página vacía | S |
+| CP-057 | RF-13 | (HU-09c) Detalle de un activo que no existe | 404 | S |
 
 ### 7.5 Pruebas transversales de seguridad
 
@@ -202,6 +216,20 @@ Formato: **Dado / Cuando / Entonces**. Tipo: U = unitaria, S = de rebanada, I = 
 | CP-046 | `docker compose up` en máquina limpia | App, BD y Mailpit levantan |
 | CP-047 | `GET /actuator/health` | `UP` |
 | CP-048 | Migraciones Flyway en BD vacía | Se aplican V1..Vn sin errores y Hibernate (`ddl-auto: validate`) no reporta diferencias |
+
+### 7.7 Cobertura de escenarios del backlog v1.1
+
+El backlog v1.1 divide la HU-09 en HU-09a, HU-09b y HU-09c, por lo que el inventario pasa a tener 16 escenarios. Al cruzar el plan con el backlog, quedan así:
+
+| Concepto | Cantidad |
+| :--- | :--- |
+| Escenarios del parcial en el backlog v1.1 | 52 |
+| Con caso de prueba antes de este cruce (v1.0) | 42 |
+| Casos agregados en v1.1 (CP-049 a CP-057) | 9 |
+| Con caso de prueba en v1.1 | 51 (98 %) |
+| Pendiente de confirmación de la regla | 1 (HU-04, activo dado de baja → 409) |
+
+Al confirmarse la regla pendiente, se le asigna el siguiente número de CP (CP-058) y la cobertura de escenarios llega al 100 %.
 
 ---
 
@@ -263,6 +291,7 @@ Al cierre de cada sprint, Brenda entrega un reporte breve con:
 | Testcontainers no corre en algún equipo | Media | Medio | Docker Desktop/WSL2 en la semana 1; Codespaces como alternativa |
 | Pruebas lentas que desalientan su ejecución | Media | Medio | Mantener las unitarias < 10 s; separar las de integración |
 | Cambios de último minuto sin pruebas | Media | Alto | Regla de DoD: sin pruebas, no hay merge |
+| Plan de pruebas y backlog desalineados | Media | Medio | Cruce con la matriz de trazabilidad en cada versión del backlog |
 
 ---
 
@@ -283,3 +312,4 @@ Al cierre de cada sprint, Brenda entrega un reporte breve con:
 | Versión | Fecha | Autor | Cambio |
 | :--- | :--- | :--- | :--- |
 | 1.0 | Oct 2026 | Brenda | Versión inicial |
+| 1.1 | 23/10/2026 | Brenda | Cruce con el backlog v1.1 y la matriz de trazabilidad: se agregan CP-049 a CP-057 y un caso por confirmar (HU-04, activo en BAJA); se corrige la redacción de CP-002, CP-025, CP-035 y CP-037; JaCoCo 0.8.15; QG-3 con SpotBugs y Checkstyle (ADR-004); nueva sección 7.7 |
