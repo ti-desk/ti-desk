@@ -5,14 +5,23 @@
 | Proyecto | TI-Desk: mesa de ayuda del área de TI |
 | Documento | Escenarios Gherkin del módulo de autenticación (Sprint 1) |
 | Responsable | Brenda (QA) |
-| Validación | Melissa (Product Owner) |
+| Validación | Melissa (Product Owner): validado el 23/10/2026 |
 | Revisión técnica | Sashi (módulo de seguridad) |
 | Requisitos | RF-01, RF-02, RF-03 (parcial) y RNF de seguridad |
-| Casos del plan de pruebas | CP-001 a CP-006, CP-008, CP-009, CP-041, CP-042 |
-| Versión / fecha | 0.1 · 23/10/2026 |
-| Estado | Borrador para validación de Melissa |
+| Casos del plan de pruebas | CP-001 a CP-006, CP-008, CP-009, CP-041, CP-042, CP-044 |
+| Versión / fecha | 0.2 · 23/10/2026 |
+| Estado | Validado por el Product Owner; pendiente revisión técnica de Sashi |
 
 Convenciones: las respuestas de error usan `application/problem+json` (RFC 9457). El token JWT expira a los 30 minutos y solo lleva el identificador del usuario y la expiración; el rol y el estado activo se leen de la base de datos en cada petición (ADR-003).
+
+## Reglas de negocio de registro (definidas por el Product Owner)
+
+| Regla | Definición |
+| :--- | :--- |
+| Contraseña válida | Mínimo 8 caracteres, con al menos una mayúscula, una minúscula, un número y un carácter especial (por ejemplo `#`, `$`, `@`, `!`) |
+| Correo institucional | Formato de correo válido **y** dominio `@unistmo.edu.mx`; cualquier otro dominio se rechaza con 400 y ProblemDetail |
+| Correo duplicado | 409 con ProblemDetail |
+| Rol por defecto | USUARIO; el cliente no puede elegirlo |
 
 ---
 
@@ -30,7 +39,7 @@ Característica: Registro de usuarios
 
   @CP-001 @integracion
   Escenario: Registro con datos válidos
-    Cuando envío POST /api/v1/auth/registro con nombre "Ana López", correo "ana.lopez@unistmo.edu.mx" y una contraseña válida
+    Cuando envío POST /api/v1/auth/registro con nombre "Ana López", correo "ana.lopez@unistmo.edu.mx" y contraseña "Segura#2026"
     Entonces la respuesta tiene código 201
     Y el usuario queda registrado con rol "USUARIO"
     Y el usuario queda activo
@@ -46,17 +55,45 @@ Característica: Registro de usuarios
     Y no se crea un segundo usuario
 
   @CP-003 @rebanada
-  Esquema del escenario: Registro con datos inválidos
+  Esquema del escenario: Registro con campos vacíos o formato de correo inválido
     Cuando envío POST /api/v1/auth/registro con nombre "<nombre>", correo "<correo>" y contraseña "<contraseña>"
     Entonces la respuesta tiene código 400
     Y el cuerpo es un ProblemDetail con el detalle del campo "<campo>"
 
     Ejemplos:
-      | nombre   | correo                    | contraseña   | campo      |
-      |          | ana.lopez@unistmo.edu.mx  | Segura#2026  | nombre     |
-      | Ana López|                           | Segura#2026  | correo     |
-      | Ana López| correo-sin-arroba         | Segura#2026  | correo     |
-      | Ana López| ana.lopez@unistmo.edu.mx  |              | contraseña |
+      | nombre     | correo                   | contraseña  | campo      |
+      |            | ana.lopez@unistmo.edu.mx | Segura#2026 | nombre     |
+      | Ana López  |                          | Segura#2026 | correo     |
+      | Ana López  | correo-sin-arroba        | Segura#2026 | correo     |
+      | Ana López  | ana.lopez@unistmo.edu.mx |             | contraseña |
+
+  @CP-003 @rebanada
+  Esquema del escenario: Registro con un dominio de correo no institucional
+    Cuando envío POST /api/v1/auth/registro con correo "<correo>" y una contraseña válida
+    Entonces la respuesta tiene código 400
+    Y el cuerpo es un ProblemDetail con el detalle del campo "correo"
+    Y no se crea ningún usuario
+
+    Ejemplos:
+      | correo                     |
+      | ana.lopez@gmail.com        |
+      | ana.lopez@unistmo.com      |
+      | ana.lopez@unistmo.edu.mx.co |
+
+  @CP-003 @rebanada
+  Esquema del escenario: Registro con una contraseña que no cumple la política
+    Cuando envío POST /api/v1/auth/registro con un correo institucional válido y contraseña "<contraseña>"
+    Entonces la respuesta tiene código 400
+    Y el cuerpo es un ProblemDetail con el detalle del campo "contraseña"
+    Y no se crea ningún usuario
+
+    Ejemplos:
+      | contraseña     | motivo                 |
+      | Corta#1        | menos de 8 caracteres  |
+      | sinmayuscula#1 | sin mayúscula          |
+      | SINMINUSCULA#1 | sin minúscula          |
+      | SinNumero#abc  | sin número             |
+      | SinSimbolo2026 | sin carácter especial  |
 
   @seguridad @integracion
   Escenario: El registro no permite elegir el rol
@@ -94,9 +131,9 @@ Característica: Inicio de sesión
     Y el mensaje no revela si el correo existe
 
     Ejemplos:
-      | correo                    | contraseña      |
-      | ana.lopez@unistmo.edu.mx  | ContraseñaMala  |
-      | nadie@unistmo.edu.mx      | Segura#2026     |
+      | correo                   | contraseña     |
+      | ana.lopez@unistmo.edu.mx | ContraseñaMala |
+      | nadie@unistmo.edu.mx     | Segura#2026    |
 
   @CP-009 @integracion
   Escenario: Un usuario desactivado no puede iniciar sesión
@@ -128,10 +165,10 @@ Característica: Protección de rutas
     Y el cuerpo es un ProblemDetail
 
     Ejemplos:
-      | situación                              |
-      | expirado                               |
-      | con la firma alterada                  |
-      | mal formado                            |
+      | situación              |
+      | expirado               |
+      | con la firma alterada  |
+      | mal formado            |
 
   @CP-041 @seguridad
   Esquema del escenario: Endpoints protegidos sin token
@@ -140,12 +177,12 @@ Característica: Protección de rutas
     Y el cuerpo tiene formato application/problem+json
 
     Ejemplos:
-      | método | ruta                      |
-      | GET    | /api/v1/usuarios/me       |
-      | GET    | /api/v1/usuarios          |
-      | POST   | /api/v1/tickets           |
-      | GET    | /api/v1/tickets           |
-      | GET    | /api/v1/activos           |
+      | método | ruta                          |
+      | GET    | /api/v1/usuarios/me           |
+      | GET    | /api/v1/usuarios              |
+      | POST   | /api/v1/tickets               |
+      | GET    | /api/v1/tickets               |
+      | GET    | /api/v1/activos               |
       | GET    | /api/v1/dashboard/indicadores |
 
   @CP-041 @seguridad
@@ -154,10 +191,10 @@ Característica: Protección de rutas
     Entonces la respuesta no es 401
 
     Ejemplos:
-      | método | ruta                    |
-      | POST   | /api/v1/auth/registro   |
-      | POST   | /api/v1/auth/login      |
-      | GET    | /actuator/health        |
+      | método | ruta                  |
+      | POST   | /api/v1/auth/registro |
+      | POST   | /api/v1/auth/login    |
+      | GET    | /actuator/health      |
 
   @CP-008 @CP-042 @seguridad
   Esquema del escenario: Acceso con un rol sin permiso
@@ -167,13 +204,13 @@ Característica: Protección de rutas
     Y el cuerpo tiene formato application/problem+json
 
     Ejemplos:
-      | rol      | método | ruta                              |
-      | USUARIO  | GET    | /api/v1/usuarios                  |
-      | TECNICO  | GET    | /api/v1/usuarios                  |
-      | USUARIO  | PATCH  | /api/v1/usuarios/1                |
-      | TECNICO  | PATCH  | /api/v1/usuarios/1                |
-      | USUARIO  | GET    | /api/v1/dashboard/indicadores     |
-      | TECNICO  | GET    | /api/v1/dashboard/indicadores     |
+      | rol     | método | ruta                          |
+      | USUARIO | GET    | /api/v1/usuarios              |
+      | TECNICO | GET    | /api/v1/usuarios              |
+      | USUARIO | PATCH  | /api/v1/usuarios/1            |
+      | TECNICO | PATCH  | /api/v1/usuarios/1            |
+      | USUARIO | GET    | /api/v1/dashboard/indicadores |
+      | TECNICO | GET    | /api/v1/dashboard/indicadores |
 
   @CP-042 @seguridad
   Escenario: Acceso permitido con el rol correcto
@@ -198,15 +235,15 @@ Característica: Protección de rutas
 
 ---
 
-## Decisiones pendientes (resolver con Melissa y Sashi antes de automatizar)
+## Decisiones pendientes
 
-| # | Pendiente | Propuesta |
+| # | Pendiente | Estado |
 | :--- | :--- | :--- |
-| 1 | ~~CP-002 dice "409 o 400" para correo duplicado~~ | **Resuelto:** 409, según el backlog v1.1 de Melissa; el ajuste de redacción va en el plan de pruebas v1.1 (TID-15) |
-| 2 | Regla de contraseña válida (longitud mínima, complejidad) no está definida en el anteproyecto | Que Melissa la defina como criterio de aceptación; los ejemplos de arriba usan "Segura#2026" como valor válido |
-| 3 | Dominio del correo institucional | Confirmar si se valida (por ejemplo `@unistmo.edu.mx`) o solo el formato |
-| 4 | Código al desactivar: ¿401 en login y 401 con token vigente? | Confirmar con Sashi que el filtro JWT responde 401 (ADR-003, punto 5) |
-| 5 | Las listas de rutas en CP-041/CP-042 son las del contrato v1 | Completarlas con las rutas reales conforme existan los controladores |
+| 1 | Correo duplicado: ¿409 o 400? | **Resuelto:** 409, según el backlog v1.1; el ajuste de redacción de CP-002 va en el plan de pruebas v1.1 (TID-15) |
+| 2 | Regla de contraseña válida | **Resuelto (Melissa, 23/10/2026):** mínimo 8 caracteres, con mayúscula, minúscula, número y carácter especial |
+| 3 | Dominio del correo institucional | **Resuelto (Melissa, 23/10/2026):** se valida `@unistmo.edu.mx` además del formato; otro dominio responde 400 con ProblemDetail |
+| 4 | ¿El filtro JWT responde 401 con token vigente de usuario desactivado? | **Abierto:** confirmar con Sashi (ADR-003, punto 5) |
+| 5 | Las listas de rutas de CP-041 y CP-042 son las del contrato v1 | **Abierto:** completarlas conforme existan los controladores |
 
 ## Trazabilidad
 
@@ -214,7 +251,7 @@ Característica: Protección de rutas
 | :--- | :--- | :--- | :--- |
 | Registro válido | CP-001 | RF-01 | Integración |
 | Correo duplicado | CP-002 | RF-01 | Integración |
-| Datos inválidos | CP-003 | RF-01 | Rebanada (`@WebMvcTest`) |
+| Campos vacíos, correo inválido, dominio no institucional y contraseña débil | CP-003 | RF-01 | Rebanada (`@WebMvcTest`) |
 | Login correcto | CP-004 | RF-02 | Integración |
 | Login incorrecto | CP-005 | RF-02 | Integración |
 | Token inválido | CP-006 | RF-02 | Seguridad |
@@ -223,8 +260,11 @@ Característica: Protección de rutas
 | Rutas sin token | CP-041 | RNF seguridad | Seguridad |
 | Logs sin secretos | CP-044 | RNF seguridad | Seguridad |
 
+Nota para Melissa: las reglas de contraseña y de dominio no estaban en el SRS ni en el anteproyecto; conviene reflejarlas en el backlog (criterios de aceptación de la historia de registro) y en la matriz de trazabilidad.
+
 ## Historial del documento
 
 | Versión | Fecha | Autor | Cambio |
 | :--- | :--- | :--- | :--- |
 | 0.1 | 23/10/2026 | Brenda | Borrador inicial para validación de Melissa |
+| 0.2 | 23/10/2026 | Brenda | Se incorporan las reglas de contraseña y dominio definidas por Melissa; se agregan escenarios de dominio no institucional y contraseña débil; pendientes 1 a 3 resueltas |
