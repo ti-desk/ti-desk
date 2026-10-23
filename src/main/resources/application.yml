@@ -1,11 +1,15 @@
 spring:
   application:
     name: ti-desk
+  config:
+    import: "optional:file:.env[.properties]"
   datasource:
-    url: jdbc:postgresql://localhost:5432/tidesk_db
-    username: postgres
-    password: postgres
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/tidesk_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: validate
     show-sql: true
@@ -18,7 +22,6 @@ spring:
 management:
   endpoints:
     web:
-    # Asegura la exposición de salud y métricas requeridas (Sección 9 y 11)
       exposure:
         include: health, prometheus, info
   endpoint:
