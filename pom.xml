@@ -155,6 +155,13 @@
 								<exclude>**/dto/**</exclude>
 								<!-- NUEVO: la clase de arranque no cuenta para la cobertura -->
 								<exclude>**/*Application.class</exclude>
+								    <!-- Entidades JPA: solo datos (getters/setters), sin lógica de negocio -->
+    								<exclude>**/ticket/Ticket.class</exclude>
+    								<exclude>**/ticket/HistorialEstado.class</exclude>
+    								<exclude>**/usuario/Usuario.class</exclude>
+   									<exclude>**/activo/Activo.class</exclude>
+    								<exclude>**/sla/PoliticaSla.class</exclude>
+    								<exclude>**/comentario/Comentario.class</exclude>
 							</excludes>
 						</configuration>
 					</execution>
