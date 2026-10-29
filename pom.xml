@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.1</version>
+		<version>4.1.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>mx.edu.tidesk</groupId>
@@ -189,6 +189,13 @@
 								<exclude>**/dto/**</exclude>
 								<!-- NUEVO: la clase de arranque no cuenta para la cobertura -->
 								<exclude>**/*Application.class</exclude>
+								    <!-- Entidades JPA: solo datos (getters/setters), sin lógica de negocio -->
+    								<exclude>**/ticket/Ticket.class</exclude>
+    								<exclude>**/ticket/HistorialEstado.class</exclude>
+    								<exclude>**/usuario/Usuario.class</exclude>
+   									<exclude>**/activo/Activo.class</exclude>
+    								<exclude>**/sla/PoliticaSla.class</exclude>
+    								<exclude>**/comentario/Comentario.class</exclude>
 							</excludes>
 						</configuration>
 					</execution>
