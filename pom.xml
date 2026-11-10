@@ -112,12 +112,65 @@
 			</plugin>
 
 			<!-- ======================================================= -->
+			<!-- 				CONFIGURACIÓN DE SPOGBUGS				 -->
+			<!-- ======================================================= -->
+			<plugin>
+				<groupId>com.github.spotbugs</groupId>
+				<artifactId>spotbugs-maven-plugin</artifactId>
+				<version>4.8.3.1</version>
+				<configuration>
+					<effort>Max</effort>
+					<threshold>Medium</threshold>
+					<failOnError>true</failOnError>
+					<xmlOutput>true</xmlOutput>
+					<spotbugsXmlOutputDirectory>${project.build.directory}/spotbugs</spotbugsXmlOutputDirectory>
+					<excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile> <!-- Opcional: para mitigar falsos positivos -->
+				</configuration>
+				<executions>
+					<execution>
+						<id>analyze-spotbugs</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- ======================================================= -->
+            <!--                CONFIGURACIÓN DE CHECKSTYLE              -->
+            <!-- ======================================================= -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.3.1</version>
+                <configuration>
+                    <configLocation>google_checks.xml</configLocation>
+                    <consoleOutput>true</consoleOutput>
+                    <failsOnError>true</failsOnError>
+                    <failOnViolation>true</failOnViolation>
+                    <violationSeverity>error</violationSeverity>
+                    <includeTestSourceDirectory>false</includeTestSourceDirectory>
+                    <excludes>**/dto/**,**/config/**,**/entity/**</excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>validate-checkstyle</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+			
+			<!-- ======================================================= -->
 			<!-- CONFIGURACIÓN DE JACOCO (QUALITY GATE 60% COBERTURA)     -->
 			<!-- ======================================================= -->
 			<plugin>
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>0.8.16</version> <!-- Actualizado para soportar versiones recientes de Java -->
+				<version>0.8.15</version> <!-- Actualizado para soportar versiones recientes de Java -->
 				<executions>
 					<execution>
 						<id>prepare-agent</id>
