@@ -32,12 +32,12 @@ class InfraestructuraTest extends IntegracionBaseTest {
     }
 
     @Test
-    void flywayAplicoV1yV2SinErrores() {
+    void flywayAplicoTodasLasMigracionesSinErrores() {
         List<String> versiones = jdbc.queryForList(
                 "SELECT version FROM flyway_schema_history WHERE success = true ORDER BY installed_rank",
                 String.class);
 
-        assertThat(versiones).containsExactly("1", "2","3");
+        assertThat(versiones).containsExactly("1", "2", "3", "4");
     }
 
     @Test
@@ -47,6 +47,15 @@ class InfraestructuraTest extends IntegracionBaseTest {
 
         assertThat(indices).contains("ix_ticket_estado_prioridad", "ix_ticket_tecnico",
                 "ix_ticket_fecha_limite_sla");
+    }
+
+    @Test
+    void v4CargoUnUsuarioDePruebaPorRol() {
+        List<String> roles = jdbc.queryForList(
+                "SELECT rol FROM usuario WHERE email LIKE '%.demo@unistmo.edu.mx' ORDER BY rol",
+                String.class);
+
+        assertThat(roles).containsExactly("ADMIN", "TECNICO", "USUARIO");
     }
 
     @Test
