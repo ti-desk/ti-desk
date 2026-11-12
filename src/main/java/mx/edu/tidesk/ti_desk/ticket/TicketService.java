@@ -12,9 +12,13 @@ import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSla;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSlaRepository;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
+import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
+import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.TicketResponse;
+import mx.edu.tidesk.ti_desk.usuario.Rol;
 import mx.edu.tidesk.ti_desk.usuario.Usuario;
 import mx.edu.tidesk.ti_desk.usuario.UsuarioRepository;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -78,6 +82,19 @@ public class TicketService {
         ticket.setFechaLimiteSla(ahora.plus(duracion(politica)));
 
         return TicketResponse.desde(tickets.save(ticket));
+    }
+
+    /**
+     * RF-05: lista los tickets visibles para el usuario según su rol,
+     * con filtros opcionales y paginación. La respuesta solo usa los ids de
+     * las relaciones, así que no se disparan consultas extra (sin N+1).
+     */
+    @Transactional(readOnly = true)
+    public PaginaResponse<TicketResponse> listar(FiltroTickets filtro, Pageable pagina,
+                                                 Long usuarioId, Rol rol) {
+        return PaginaResponse.desde(
+                tickets.findAll(TicketSpecifications.visiblesPara(filtro, usuarioId, rol), pagina),
+                TicketResponse::desde);
     }
 
     private static Duration duracion(PoliticaSla politica) {

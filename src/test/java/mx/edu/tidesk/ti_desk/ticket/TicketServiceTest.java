@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 
 import mx.edu.tidesk.ti_desk.activo.Activo;
@@ -20,13 +21,20 @@ import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSla;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSlaRepository;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
+import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
+import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.TicketResponse;
+import mx.edu.tidesk.ti_desk.usuario.Rol;
 import mx.edu.tidesk.ti_desk.usuario.Usuario;
 import mx.edu.tidesk.ti_desk.usuario.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 class TicketServiceTest {
 
@@ -137,5 +145,27 @@ class TicketServiceTest {
             case BAJA -> new BigDecimal("72");
         });
         return p;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listarConvierteLaPaginaDeEntidadesADto() {
+        Ticket ticket = new Ticket();
+        ticket.setId(1L);
+        ticket.setFolio("TID-2026-00001");
+        ticket.setEstado(EstadoTicket.ABIERTO);
+        ticket.setSolicitante(solicitante);
+        Pageable pagina = PageRequest.of(0, 20);
+        when(tickets.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(ticket), pagina, 1));
+
+        PaginaResponse<TicketResponse> resultado =
+                servicio.listar(FiltroTickets.sinFiltros(), pagina, 7L, Rol.USUARIO);
+
+        assertThat(resultado.contenido()).extracting(TicketResponse::folio).containsExactly("TID-2026-00001");
+        assertThat(resultado.contenido().get(0).solicitanteId()).isEqualTo(7L);
+        assertThat(resultado.totalElementos()).isEqualTo(1);
+        assertThat(resultado.pagina()).isZero();
+        assertThat(resultado.tamano()).isEqualTo(20);
     }
 }

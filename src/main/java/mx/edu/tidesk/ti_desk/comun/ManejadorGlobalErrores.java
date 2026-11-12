@@ -9,6 +9,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * Traduce las excepciones a respuestas application/problem+json (RFC 9457).
@@ -41,6 +42,21 @@ public class ManejadorGlobalErrores {
     public ProblemDetail noEncontrado(RecursoNoEncontradoException ex) {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problema.setTitle("Recurso no encontrado");
+        return problema;
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail tipoInvalido(MethodArgumentTypeMismatchException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                "El valor del parámetro '" + ex.getName() + "' no es válido");
+        problema.setTitle("Parámetro inválido");
+        return problema;
+    }
+
+    @ExceptionHandler(ParametroInvalidoException.class)
+    public ProblemDetail parametroInvalido(ParametroInvalidoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problema.setTitle("Parámetro inválido");
         return problema;
     }
 }

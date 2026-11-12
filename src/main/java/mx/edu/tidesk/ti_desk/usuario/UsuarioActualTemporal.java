@@ -23,8 +23,16 @@ public class UsuarioActualTemporal implements UsuarioActual {
 
     @Override
     public Long id() {
+        return cargar().getId();
+    }
+
+    @Override
+    public Rol rol() {
+        return cargar().getRol();
+    }
+
+    private Usuario cargar() {
         return usuarios.findByEmail(CORREO_USUARIO_DEMO)
-                .map(Usuario::getId)
                 .orElseThrow(() -> new RecursoNoEncontradoException(
                         "No existe el usuario de prueba " + CORREO_USUARIO_DEMO));
     }
