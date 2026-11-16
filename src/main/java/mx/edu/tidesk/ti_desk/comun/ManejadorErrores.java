@@ -2,6 +2,7 @@ package mx.edu.tidesk.ti_desk.comun;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import mx.edu.tidesk.ti_desk.seguridad.CredencialesInvalidasException;
 import mx.edu.tidesk.ti_desk.usuario.CorreoDuplicadoException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -39,6 +40,15 @@ public class ManejadorErrores {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST, "El cuerpo de la petición no es un JSON válido.");
         problema.setTitle("Petición mal formada");
+        return problema;
+    }
+
+    /** 401: login fallido. Mismo mensaje sin importar la causa (RF-02). */
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    public ProblemDetail credencialesInvalidas(CredencialesInvalidasException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNAUTHORIZED, "Correo o contraseña incorrectos.");
+        problema.setTitle("Credenciales inválidas");
         return problema;
     }
 
