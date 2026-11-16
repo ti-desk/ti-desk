@@ -2,15 +2,19 @@ package mx.edu.tidesk.ti_desk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class InfraestructuraTest extends IntegracionBaseTest {
@@ -32,12 +36,22 @@ class InfraestructuraTest extends IntegracionBaseTest {
     }
 
     @Test
-    void flywayAplicoV1yV2SinErrores() {
-        List<String> versiones = jdbc.queryForList(
-                "SELECT version FROM flyway_schema_history WHERE success = true ORDER BY installed_rank",
-                String.class);
+    void flywayAplicoTodasLasMigracionesSinErrores() throws Exception {
+        List<String> esperadas = Arrays.stream(new PathMatchingResourcePatternResolver()
+                        .getResources("classpath:db/migration/V*__*.sql"))
+                .map(recurso -> recurso.getFilename().substring(1, recurso.getFilename().indexOf("__")).replace('_', '.'))
+                .sorted(Comparator.comparing(BigDecimal::new))
+                .toList();
 
-        assertThat(versiones).containsExactly("1", "2","3");
+        List<String> aplicadas = jdbc.queryForList(
+                "SELECT version FROM flyway_schema_history WHERE version IS NOT NULL ORDER BY installed_rank",
+                String.class);
+        Integer fallidas = jdbc.queryForObject(
+                "SELECT count(*) FROM flyway_schema_history WHERE success = false", Integer.class);
+
+        assertThat(esperadas).as("migraciones en db/migration").isNotEmpty();
+        assertThat(aplicadas).as("versiones aplicadas, en orden").containsExactlyElementsOf(esperadas);
+        assertThat(fallidas).as("migraciones fallidas").isZero();
     }
 
     @Test
