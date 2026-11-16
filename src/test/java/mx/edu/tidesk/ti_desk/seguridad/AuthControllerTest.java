@@ -1,5 +1,6 @@
 package mx.edu.tidesk.ti_desk.seguridad;
 
+import mx.edu.tidesk.ti_desk.usuario.UsuarioRepository;
 import java.time.Instant;
 import mx.edu.tidesk.ti_desk.comun.ManejadorErrores;
 import mx.edu.tidesk.ti_desk.seguridad.dto.LoginRequest;
@@ -39,6 +40,12 @@ class AuthControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+    
+    @MockitoBean
+    private JwtService jwtService;
+
+    @MockitoBean
+    private UsuarioRepository usuarioRepository;
 
     @MockitoBean
     private UsuarioService usuarioService;

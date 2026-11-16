@@ -1,5 +1,7 @@
 package mx.edu.tidesk.ti_desk.seguridad;
 
+import mx.edu.tidesk.ti_desk.usuario.UsuarioRepository;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -23,6 +25,12 @@ class SecurityConfigTest {
 
     @Autowired
     private MockMvc mockMvc;
+    
+    @MockitoBean
+    private JwtService jwtService;
+
+    @MockitoBean
+    private UsuarioRepository usuarioRepository;
 
     @RestController
     static class PruebaController {
