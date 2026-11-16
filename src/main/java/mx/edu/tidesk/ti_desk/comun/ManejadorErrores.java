@@ -1,0 +1,53 @@
+package mx.edu.tidesk.ti_desk.comun;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import mx.edu.tidesk.ti_desk.usuario.CorreoDuplicadoException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+/**
+ * Traduce las excepciones de la API a ProblemDetail (RFC 9457).
+ * Los mensajes son fijos o vienen de las reglas de validación:
+ * nunca se devuelve el detalle interno de la excepción.
+ */
+@RestControllerAdvice
+public class ManejadorErrores {
+
+    /** 400: un campo no cumple las reglas de validación. Indica cuál y por qué. */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ProblemDetail validacion(MethodArgumentNotValidException ex) {
+        Map<String, String> errores = new LinkedHashMap<>();
+        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
+            errores.merge(error.getField(), error.getDefaultMessage(), (a, b) -> a + "; " + b);
+        }
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Uno o más campos no son válidos.");
+        problema.setTitle("Datos inválidos");
+        problema.setProperty("errores", errores);
+        return problema;
+    }
+
+    /** 400: el cuerpo no es JSON válido o viene vacío. */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ProblemDetail cuerpoIlegible(HttpMessageNotReadableException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "El cuerpo de la petición no es un JSON válido.");
+        problema.setTitle("Petición mal formada");
+        return problema;
+    }
+
+    /** 409: el correo ya está registrado (RF-01). */
+    @ExceptionHandler(CorreoDuplicadoException.class)
+    public ProblemDetail correoDuplicado(CorreoDuplicadoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, "El correo ya está registrado.");
+        problema.setTitle("Correo duplicado");
+        return problema;
+    }
+}
