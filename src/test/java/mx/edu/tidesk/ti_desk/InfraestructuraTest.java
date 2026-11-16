@@ -37,7 +37,7 @@ class InfraestructuraTest extends IntegracionBaseTest {
                 "SELECT version FROM flyway_schema_history WHERE success = true ORDER BY installed_rank",
                 String.class);
 
-        assertThat(versiones).containsExactly("1", "2");
+        assertThat(versiones).containsExactly("1", "2","3");
     }
 
     @Test
