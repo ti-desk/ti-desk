@@ -1,5 +1,6 @@
 package mx.edu.tidesk.ti_desk.seguridad;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import mx.edu.tidesk.ti_desk.usuario.UsuarioRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.junit.jupiter.api.Test;
@@ -31,6 +32,16 @@ class SecurityConfigTest {
 
     @MockitoBean
     private UsuarioRepository usuarioRepository;
+    
+    @Test
+    void documentacionOpenApiNoExigeToken() throws Exception {
+        for (String ruta : new String[] {"/v3/api-docs", "/swagger-ui/index.html", "/swagger-ui.html"}) {
+            mockMvc.perform(get(ruta))
+                    .andExpect(resultado -> assertThat(resultado.getResponse().getStatus())
+                            .as("La ruta %s debe ser pública", ruta)
+                            .isNotIn(401, 403));
+        }
+    }
 
     @RestController
     static class PruebaController {
