@@ -3,9 +3,11 @@ package mx.edu.tidesk.ti_desk.comun;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import mx.edu.tidesk.ti_desk.seguridad.CredencialesInvalidasException;
+import mx.edu.tidesk.ti_desk.ticket.TransicionNoPermitidaException;
 import mx.edu.tidesk.ti_desk.usuario.CambioNoPermitidoException;
 import mx.edu.tidesk.ti_desk.usuario.CorreoDuplicadoException;
 import mx.edu.tidesk.ti_desk.usuario.UsuarioNoEncontradoException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -108,6 +110,35 @@ public class ManejadorErrores {
         // El mensaje lo escribe TicketService: es texto fijo con el id buscado.
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problema.setTitle("Recurso no encontrado");
+        return problema;
+    }
+
+    /** 409: la máquina de estados no permite el cambio; indica la regla violada (RF-08). */
+    @ExceptionHandler(TransicionNoPermitidaException.class)
+    public ProblemDetail transicionNoPermitida(TransicionNoPermitidaException ex) {
+        // El mensaje lo escribe MaquinaEstadosTicket o TicketService: es texto fijo.
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problema.setTitle("Transición de estado no permitida");
+        problema.setProperty("estadoActual", ex.getEstadoActual());
+        problema.setProperty("estadoSolicitado", ex.getEstadoSolicitado());
+        return problema;
+    }
+
+    /** 403: el usuario ve el recurso, pero no le toca hacer esa acción (RF-08). */
+    @ExceptionHandler(AccionNoPermitidaException.class)
+    public ProblemDetail accionNoPermitida(AccionNoPermitidaException ex) {
+        // El mensaje lo escribe TicketService: es texto fijo.
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problema.setTitle("Acción no permitida");
+        return problema;
+    }
+
+    /** 409: otro usuario modificó el mismo registro al mismo tiempo (@Version). */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ProblemDetail conflictoDeVersion(OptimisticLockingFailureException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                "Otro usuario modificó este registro al mismo tiempo. Vuelve a consultarlo e intenta de nuevo.");
+        problema.setTitle("Modificación concurrente");
         return problema;
     }
 }
