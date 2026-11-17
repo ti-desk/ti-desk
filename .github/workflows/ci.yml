@@ -36,12 +36,19 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
-      - name: Compilar, probar y verificar Quality Gate (JaCoCo)
+      - name: Dar permisos de ejecución a mvnw
+        run: chmod +x mvnw
+
+      - name: Compilar, probar y verificar Calidad (Checkstyle, SpotBugs, JaCoCo)
         run: mvn -B verify
 
-      - name: Publicar reporte de cobertura JaCoCo
+      - name: Publicar reportes de calidad y cobertura
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jacoco-coverage-report
-          path: target/site/jacoco/
+          name: ti-desk-quality-reports
+          path: |
+            target/site/jacoco/
+            target/spotbugs/
+            target/checkstyle-result.xml
+            target/site/checkstyle.html
