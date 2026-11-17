@@ -17,6 +17,8 @@ import java.util.Optional;
 
 import mx.edu.tidesk.ti_desk.activo.Activo;
 import mx.edu.tidesk.ti_desk.activo.ActivoRepository;
+import mx.edu.tidesk.ti_desk.comentario.Comentario;
+import mx.edu.tidesk.ti_desk.comentario.ComentarioRepository;
 import mx.edu.tidesk.ti_desk.comun.AccionNoPermitidaException;
 import mx.edu.tidesk.ti_desk.comun.ParametroInvalidoException;
 import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
@@ -27,6 +29,7 @@ import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
+import mx.edu.tidesk.ti_desk.ticket.dto.TicketDetalleResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.TicketResponse;
 import mx.edu.tidesk.ti_desk.usuario.Rol;
 import mx.edu.tidesk.ti_desk.usuario.Usuario;
@@ -51,6 +54,7 @@ class TicketServiceTest {
     private PoliticaSlaRepository politicas;
     private GeneradorFolio generadorFolio;
     private HistorialEstadoRepository historial;
+    private ComentarioRepository comentarios;
     private TicketService servicio;
     private Usuario solicitante;
 
@@ -62,9 +66,10 @@ class TicketServiceTest {
         politicas = mock(PoliticaSlaRepository.class);
         generadorFolio = mock(GeneradorFolio.class);
         historial = mock(HistorialEstadoRepository.class);
+        comentarios = mock(ComentarioRepository.class);
         Clock reloj = Clock.fixed(AHORA, ZoneOffset.UTC);
         servicio = new TicketService(tickets, usuarios, activos, politicas, generadorFolio,
-                new MaquinaEstadosTicket(historial, reloj), reloj);
+                new MaquinaEstadosTicket(historial, reloj), comentarios, historial, reloj);
 
         solicitante = new Usuario();
         solicitante.setId(7L);
@@ -279,6 +284,48 @@ class TicketServiceTest {
                 .isInstanceOf(AccionNoPermitidaException.class);
         verify(historial, never()).save(any());
         verify(tickets, never()).saveAndFlush(any());
+    }
+
+    // ---------- Detalle del ticket ----------
+
+    @ParameterizedTest
+    @CsvSource({"USUARIO, false", "TECNICO, true", "ADMIN, true"})
+    void elDetalleTraeComentariosEHistorialYSoloStaffVeInternos(Rol rol, boolean incluyeInternos) {
+        Ticket ticket = visible(ticket(EstadoTicket.ASIGNADO, 3L));
+        Comentario comentario = new Comentario();
+        comentario.setId(1L);
+        comentario.setTicket(ticket);
+        comentario.setAutor(solicitante);
+        comentario.setTexto("Sigue sin red");
+        HistorialEstado creado = new HistorialEstado();
+        creado.setEstadoNuevo(EstadoTicket.ABIERTO);
+        creado.setUsuario(solicitante);
+        HistorialEstado asignado = new HistorialEstado();
+        asignado.setEstadoAnterior(EstadoTicket.ABIERTO);
+        asignado.setEstadoNuevo(EstadoTicket.ASIGNADO);
+        when(comentarios.findDelTicket(15L, incluyeInternos)).thenReturn(List.of(comentario));
+        when(historial.findDelTicket(15L)).thenReturn(List.of(creado, asignado));
+
+        TicketDetalleResponse detalle = servicio.detalle(15L, 7L, rol);
+
+        assertThat(detalle.ticket().folio()).isEqualTo("TID-2026-00015");
+        assertThat(detalle.comentarios()).extracting(c -> c.texto()).containsExactly("Sigue sin red");
+        assertThat(detalle.historial()).extracting(h -> h.estadoNuevo())
+                .containsExactly(EstadoTicket.ABIERTO, EstadoTicket.ASIGNADO);
+        assertThat(detalle.historial().get(0).estadoAnterior()).isNull();
+        assertThat(detalle.historial().get(0).usuarioId()).isEqualTo(7L);
+        assertThat(detalle.historial().get(1).usuarioId()).isNull();
+        verify(comentarios).findDelTicket(15L, incluyeInternos);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void elDetalleDeUnTicketNoVisibleResponde404() {
+        when(tickets.findOne(any(Specification.class))).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.detalle(15L, 8L, Rol.USUARIO))
+                .isInstanceOf(RecursoNoEncontradoException.class);
+        verify(comentarios, never()).findDelTicket(any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     // ---------- RF-06: asignación ----------

@@ -10,6 +10,8 @@ import java.util.Set;
 
 import mx.edu.tidesk.ti_desk.activo.Activo;
 import mx.edu.tidesk.ti_desk.activo.ActivoRepository;
+import mx.edu.tidesk.ti_desk.comentario.ComentarioRepository;
+import mx.edu.tidesk.ti_desk.comentario.dto.ComentarioResponse;
 import mx.edu.tidesk.ti_desk.comun.AccionNoPermitidaException;
 import mx.edu.tidesk.ti_desk.comun.ParametroInvalidoException;
 import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
@@ -19,7 +21,9 @@ import mx.edu.tidesk.ti_desk.ticket.dto.AsignarTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
+import mx.edu.tidesk.ti_desk.ticket.dto.HistorialEstadoResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
+import mx.edu.tidesk.ti_desk.ticket.dto.TicketDetalleResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.TicketResponse;
 import mx.edu.tidesk.ti_desk.usuario.Rol;
 import mx.edu.tidesk.ti_desk.usuario.Usuario;
@@ -45,11 +49,14 @@ public class TicketService {
     private final PoliticaSlaRepository politicas;
     private final GeneradorFolio generadorFolio;
     private final MaquinaEstadosTicket maquinaEstados;
+    private final ComentarioRepository comentarios;
+    private final HistorialEstadoRepository historial;
     private final Clock clock;
 
     public TicketService(TicketRepository tickets, UsuarioRepository usuarios,
                          ActivoRepository activos, PoliticaSlaRepository politicas,
                          GeneradorFolio generadorFolio, MaquinaEstadosTicket maquinaEstados,
+                         ComentarioRepository comentarios, HistorialEstadoRepository historial,
                          Clock clock) {
         this.tickets = tickets;
         this.usuarios = usuarios;
@@ -57,6 +64,8 @@ public class TicketService {
         this.politicas = politicas;
         this.generadorFolio = generadorFolio;
         this.maquinaEstados = maquinaEstados;
+        this.comentarios = comentarios;
+        this.historial = historial;
         this.clock = clock;
     }
 
@@ -111,6 +120,21 @@ public class TicketService {
         return PaginaResponse.desde(
                 tickets.findAll(TicketSpecifications.visiblesPara(filtro, usuarioId, rol), pagina),
                 TicketResponse::desde);
+    }
+
+    /**
+     * Detalle del ticket con sus comentarios e historial. Un USUARIO no ve los
+     * comentarios internos. Son tres consultas fijas, sin importar cuántos haya.
+     */
+    @Transactional(readOnly = true)
+    public TicketDetalleResponse detalle(Long ticketId, Long usuarioId, Rol rol) {
+        Ticket ticket = buscarVisible(ticketId, usuarioId, rol);
+        return new TicketDetalleResponse(
+                TicketResponse.desde(ticket),
+                comentarios.findDelTicket(ticketId, rol != Rol.USUARIO).stream()
+                        .map(ComentarioResponse::desde).toList(),
+                historial.findDelTicket(ticketId).stream()
+                        .map(HistorialEstadoResponse::desde).toList());
     }
 
     /**
@@ -218,8 +242,11 @@ public class TicketService {
 
     /**
      * Busca el ticket aplicando la misma visibilidad por rol que el listado (RF-05).
+     * Si no existe o el usuario no lo puede ver, lanza 404 (no se revela que existe).
+     * Es pública para que otros servicios (comentarios) usen la misma regla.
      */
-    private Ticket buscarVisible(Long ticketId, Long usuarioId, Rol rol) {
+    @Transactional(readOnly = true)
+    public Ticket buscarVisible(Long ticketId, Long usuarioId, Rol rol) {
         Specification<Ticket> conId = (root, query, cb) -> cb.equal(root.get("id"), ticketId);
         return tickets.findOne(
                         TicketSpecifications.visiblesPara(FiltroTickets.sinFiltros(), usuarioId, rol).and(conId))
