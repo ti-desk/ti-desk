@@ -20,7 +20,7 @@ import java.util.Date;
  * "activo" se leen de la base de datos en cada petición.
  */
 @Service
-public class JwtService {
+public final class JwtService {
 
     private static final int MIN_SECRET_BYTES = 32; // 256 bits para HS256
 
