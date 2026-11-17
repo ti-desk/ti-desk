@@ -13,6 +13,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * Traduce las excepciones de la API a ProblemDetail (RFC 9457).
@@ -79,6 +80,34 @@ public class ManejadorErrores {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, ex.getMessage() + ".");
         problema.setTitle("Cambio no permitido");
+        return problema;
+    }
+
+    /** 400: un parámetro de consulta no tiene el tipo esperado, por ejemplo ?estado=PERDIDO (RF-05). */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail tipoInvalido(MethodArgumentTypeMismatchException ex) {
+        // Solo se usa el nombre del parámetro, nunca el valor que mandó el cliente.
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "El valor del parámetro '" + ex.getName() + "' no es válido.");
+        problema.setTitle("Parámetro inválido");
+        return problema;
+    }
+
+    /** 400: un parámetro tiene un valor no permitido, por ejemplo un campo de orden (RF-05). */
+    @ExceptionHandler(ParametroInvalidoException.class)
+    public ProblemDetail parametroInvalido(ParametroInvalidoException ex) {
+        // El mensaje lo escribe TicketController: es texto fijo.
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problema.setTitle("Parámetro inválido");
+        return problema;
+    }
+
+    /** 404: el recurso no existe o no es visible para el usuario (RF-04). */
+    @ExceptionHandler(RecursoNoEncontradoException.class)
+    public ProblemDetail recursoNoEncontrado(RecursoNoEncontradoException ex) {
+        // El mensaje lo escribe TicketService: es texto fijo con el id buscado.
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problema.setTitle("Recurso no encontrado");
         return problema;
     }
 }

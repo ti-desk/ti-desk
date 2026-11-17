@@ -26,6 +26,9 @@ public class GeneradorFolio {
 
     public String siguiente(int anio) {
         Integer numero = jdbc.queryForObject(SIGUIENTE_NUMERO, Integer.class, anio);
+        if (numero == null) {
+            throw new IllegalStateException("No se pudo generar el folio para el año " + anio);
+        }
         return formatear(anio, numero);
     }
 

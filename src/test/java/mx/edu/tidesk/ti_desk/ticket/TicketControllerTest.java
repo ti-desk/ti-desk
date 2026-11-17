@@ -16,15 +16,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.util.List;
 
-import mx.edu.tidesk.ti_desk.comun.ManejadorGlobalErrores;
+import mx.edu.tidesk.ti_desk.comun.ManejadorErrores;
 import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.TicketResponse;
+import mx.edu.tidesk.ti_desk.seguridad.JwtService;
+import mx.edu.tidesk.ti_desk.seguridad.ProblemDetailSeguridad;
+import mx.edu.tidesk.ti_desk.seguridad.SecurityConfig;
+import mx.edu.tidesk.ti_desk.seguridad.UsuarioActualJwt;
+import mx.edu.tidesk.ti_desk.seguridad.WithMockCustomUser;
 import mx.edu.tidesk.ti_desk.usuario.Rol;
-import mx.edu.tidesk.ti_desk.usuario.UsuarioActual;
-import org.junit.jupiter.api.BeforeEach;
+import mx.edu.tidesk.ti_desk.usuario.UsuarioRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,11 +37,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+/**
+ * Contrato y seguridad de la API de tickets (RF-04 y RF-05). Por defecto la
+ * petición va autenticada como el usuario 7 con rol USUARIO.
+ */
 @WebMvcTest(TicketController.class)
-@Import(ManejadorGlobalErrores.class)
+@Import({SecurityConfig.class, ProblemDetailSeguridad.class, ManejadorErrores.class, UsuarioActualJwt.class})
+@WithMockCustomUser(id = 7, rol = Rol.USUARIO)
 class TicketControllerTest {
 
     private static final String JSON_VALIDO = """
@@ -52,13 +62,10 @@ class TicketControllerTest {
     TicketService ticketService;
 
     @MockitoBean
-    UsuarioActual usuarioActual;
+    JwtService jwtService;
 
-    @BeforeEach
-    void preparar() {
-        when(usuarioActual.id()).thenReturn(7L);
-        when(usuarioActual.rol()).thenReturn(Rol.USUARIO);
-    }
+    @MockitoBean
+    UsuarioRepository usuarioRepository;
 
     @Test
     void crearResponde201ConLocationYElTicket() throws Exception {
@@ -165,6 +172,38 @@ class TicketControllerTest {
     void listarConDireccionDeOrdenInvalidaResponde400() throws Exception {
         mvc.perform(get("/api/v1/tickets").param("sort", "folio,arriba"))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ---------- Seguridad ----------
+
+    @Test
+    @WithAnonymousUser
+    void crearSinTokenResponde401() throws Exception {
+        mvc.perform(post("/api/v1/tickets").contentType(MediaType.APPLICATION_JSON).content(JSON_VALIDO))
+                .andExpect(status().isUnauthorized());
+
+        verify(ticketService, never()).crear(any(), any());
+    }
+
+    @Test
+    @WithAnonymousUser
+    void listarSinTokenResponde401() throws Exception {
+        mvc.perform(get("/api/v1/tickets"))
+                .andExpect(status().isUnauthorized());
+
+        verify(ticketService, never()).listar(any(), any(), any(), any());
+    }
+
+    @Test
+    @WithMockCustomUser(id = 3, rol = Rol.TECNICO)
+    void listarUsaElIdYRolDelUsuarioAutenticado() throws Exception {
+        when(ticketService.listar(any(), any(), eq(3L), eq(Rol.TECNICO)))
+                .thenReturn(new PaginaResponse<>(List.of(), 0, 20, 0, 0));
+
+        mvc.perform(get("/api/v1/tickets"))
+                .andExpect(status().isOk());
+
+        verify(ticketService).listar(any(), any(), eq(3L), eq(Rol.TECNICO));
     }
 
     private static TicketResponse ticketDeEjemplo() {
