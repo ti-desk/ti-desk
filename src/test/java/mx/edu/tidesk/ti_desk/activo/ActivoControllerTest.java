@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import mx.edu.tidesk.ti_desk.IntegracionBaseTest;
@@ -14,8 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
-
-class ActivoControllerTest extends IntegracionBaseTest { // <-- AGREGA ESTE "extends"
+@WithMockUser(roles = "ADMIN") // <-- Agrega esta línea
+class ActivoControllerTest extends IntegracionBaseTest {
 
     @Autowired
     private MockMvc mockMvc;
