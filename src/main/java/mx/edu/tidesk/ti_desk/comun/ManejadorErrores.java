@@ -3,7 +3,9 @@ package mx.edu.tidesk.ti_desk.comun;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import mx.edu.tidesk.ti_desk.seguridad.CredencialesInvalidasException;
+import mx.edu.tidesk.ti_desk.usuario.CambioNoPermitidoException;
 import mx.edu.tidesk.ti_desk.usuario.CorreoDuplicadoException;
+import mx.edu.tidesk.ti_desk.usuario.UsuarioNoEncontradoException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -58,6 +60,25 @@ public class ManejadorErrores {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, "El correo ya está registrado.");
         problema.setTitle("Correo duplicado");
+        return problema;
+    }
+
+    /** 404: el usuario no existe (RF-03). */
+    @ExceptionHandler(UsuarioNoEncontradoException.class)
+    public ProblemDetail usuarioNoEncontrado(UsuarioNoEncontradoException ex) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
+                HttpStatus.NOT_FOUND, "El usuario no existe.");
+        problema.setTitle("Usuario no encontrado");
+        return problema;
+    }
+
+    /** 409: el cambio no se permite, por ejemplo un ADMIN que se desactiva a sí mismo (RF-03). */
+    @ExceptionHandler(CambioNoPermitidoException.class)
+    public ProblemDetail cambioNoPermitido(CambioNoPermitidoException ex) {
+        // El mensaje lo escribe UsuarioService: es texto fijo, no datos de la petición.
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, ex.getMessage() + ".");
+        problema.setTitle("Cambio no permitido");
         return problema;
     }
 }

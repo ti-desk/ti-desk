@@ -48,6 +48,28 @@ class JwtAuthenticationFilterTest {
 
     @MockitoBean
     private UsuarioRepository usuarios;
+    
+    @Test
+    @WithMockCustomUser(id = 5, rol = Rol.ADMIN)
+    void withMockCustomUserAutenticaSinTokenConIdYRol() throws Exception {
+        mockMvc.perform(get(YO))
+                .andExpect(status().isOk())
+                .andExpect(content().string("5:ADMIN"));
+    }
+
+    @Test
+    @WithMockCustomUser(rol = Rol.ADMIN)
+    void withMockCustomUserConRolAdminEntraARutaDeAdmin() throws Exception {
+        mockMvc.perform(get(ADMIN))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockCustomUser
+    void withMockCustomUserPorDefectoEsUsuarioSinPermisoDeAdmin() throws Exception {
+        mockMvc.perform(get(ADMIN))
+                .andExpect(status().isForbidden());
+    }
 
     @RestController
     static class RutasDePrueba {

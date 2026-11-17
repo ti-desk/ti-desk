@@ -4,12 +4,12 @@
 | Campo            | Valor                                  |
 | :--------------- | :------------------------------------- |
 | Proyecto         | TI-Desk: mesa de ayuda del área de TI |
-| Documento        | Plan de pruebas v1.1 (ticket TID-05)   |
+| Documento        | Plan de pruebas v1.1 (TID-07 y TID-15) |
 | Responsable      | Brenda (QA)                            |
 | Respaldo         | Yahir                                  |
 | Hito             | Release v0.5.0 (semana 8, parcial)     |
-| Versión / fecha | 1.1 · 23/Octubre/2026                 |
-| Estado           | Borrador para revisión del equipo     |
+| Versión / fecha | 1.1.1 · 16/Noviembre/2026                |
+| Estado           | Aprobado (PR #9 y #30)                |
 
 ---
 
@@ -93,7 +93,7 @@ Se sigue la pirámide: muchas pruebas rápidas abajo y pocas costosas arriba.
 | Base de datos en pruebas de integración | PostgreSQL 16 vía Testcontainers                 |
 | Correo                                   | Mailpit (puertos 1025 SMTP y 8025 web)            |
 | CI                                       | GitHub Actions (`ci.yml`)                         |
-| Cobertura                                | JaCoCo 0.8.15 con umbral en el build              |
+| Cobertura                                | JaCoCo 0.8.16 con umbral en el build              |
 | Análisis estático                      | SpotBugs y Checkstyle en Maven (ADR-004)          |
 | Contrato API                             | Swagger UI / OpenAPI + colección Postman o Bruno |
 | Carga                                    | k6 (Sprint 5)                                     |
@@ -344,3 +344,4 @@ Al cierre de cada sprint, Brenda entrega un reporte breve con:
 | :------- | :--------- | :----- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1.0      | Oct 2026   | Brenda | Versión inicial                                                                                                                                                                                                                                                            |
 | 1.1      | 23/10/2026 | Brenda | Cruce con el backlog v1.1 y la matriz de trazabilidad: se agregan CP-049 a CP-057 y un caso por confirmar (HU-04, activo en BAJA); se corrige la redacción de CP-002, CP-025, CP-035 y CP-037; JaCoCo 0.8.15; QG-3 con SpotBugs y Checkstyle (ADR-004); nueva sección 7.7 |
+| 1.1.1    | 16/11/2026 | Brenda | Corrección del encabezado (tickets TID-07 y TID-15, estado Aprobado) y versión de JaCoCo 0.8.16 (Dependabot, PR #42); sin cambios de contenido |
