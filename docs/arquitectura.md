@@ -41,6 +41,9 @@ El anteproyecto del proyecto define el marco de trabajo; la arquitectura lo adop
 | [ADR-001](adr/ADR-001-version-spring-boot.md) | Java 21 y Spring Boot 4.1.1 |
 | [ADR-002](adr/ADR-002-arquitectura-en-capas.md) | Arquitectura en capas con DTO |
 | [ADR-003](adr/ADR-003-autenticacion-jwt.md) | Autenticación stateless con JWT, BCrypt y autorización por rol y propiedad |
+| [ADR-004](adr/ADR-004-analisis-estatico.md) | Análisis estático en el pipeline |
+| [ADR-005](adr/ADR-005-manejo-de-errores.md) | Manejo unificado de errores con ProblemDetail |
+| [ADR-006](adr/ADR-006-migraciones-flyway.md) | Reglas para las migraciones de base de datos con Flyway |
 
 ## 5. Arquitectura en capas
 
@@ -228,17 +231,22 @@ flowchart TB
 
 El nivel 3 (componentes internos) se agrega en los siguientes sprints, conforme se construyen los módulos.
 
-## 10. Estado al 22 de octubre de 2026
+## 10. Estado al 16 de noviembre de 2026
 
 | Elemento | Estado |
 |----------|--------|
-| Proyecto base (Java 21, Spring Boot 4.1.1, Docker Compose, CI con JaCoCo) | Hecho |
-| ADR-001, ADR-002 y ADR-003 | Hecho (integrados en `main`) |
-| Migraciones Flyway V1 y V2 (modelo de datos) | Hecho (integradas en `main`) |
-| Documento de arquitectura y vistas C4 de nivel 1 y 2 | En revisión (este Pull Request) |
-| Guía de contribución (`CONTRIBUTING.md`) | En revisión (este Pull Request) |
+| Proyecto base (Java 21, Spring Boot 4.1, Docker Compose, CI con JaCoCo) | Hecho |
+| ADR-001 a ADR-004 | Hecho (integrados en `main`) |
+| ADR-005 y ADR-006 | En revisión (este Pull Request) |
+| Migraciones Flyway V1 a V3 (modelo de datos y políticas de SLA) | Hecho (integradas en `main`) |
+| Migraciones V4 (usuarios de prueba) y V5 (tipo de activo SERVIDOR) | En revisión |
+| Documento de arquitectura y vistas C4 de nivel 1 y 2 | Hecho |
+| Vista C4 de nivel 3 (componentes) | Pendiente |
+| Guía de contribución (`CONTRIBUTING.md`) | Hecho |
+| Gestión de secretos con variables de entorno | Hecho |
+| Registro, login y filtro JWT (RF-01 y RF-02) | Hecho (integrados en `main`) |
+| Administración de usuarios (RF-03) y administrador inicial | En revisión |
+| Análisis estático (SpotBugs y Checkstyle) en el pipeline | Hecho |
 | Renombrar el paquete base a `mx.edu.tidesk` | Pendiente |
-| Gestión de secretos con variables de entorno | Pendiente |
-| Módulo de seguridad (registro, login, JWT, roles) | Sprint 1, en desarrollo |
 | Pruebas de arquitectura (ArchUnit) | Pendiente |
 | Checklist OWASP firmado | Pendiente (v0.5.0) |
