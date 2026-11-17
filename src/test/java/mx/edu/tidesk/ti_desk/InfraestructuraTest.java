@@ -2,7 +2,6 @@ package mx.edu.tidesk.ti_desk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -11,6 +10,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -40,7 +40,7 @@ class InfraestructuraTest extends IntegracionBaseTest {
         List<String> esperadas = Arrays.stream(new PathMatchingResourcePatternResolver()
                         .getResources("classpath:db/migration/V*__*.sql"))
                 .map(recurso -> recurso.getFilename().substring(1, recurso.getFilename().indexOf("__")).replace('_', '.'))
-                .sorted(Comparator.comparing(BigDecimal::new))
+                .sorted(Comparator.comparing(MigrationVersion::fromVersion))
                 .toList();
 
         List<String> aplicadas = jdbc.queryForList(
