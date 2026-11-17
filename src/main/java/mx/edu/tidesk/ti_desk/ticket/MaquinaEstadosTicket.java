@@ -59,6 +59,14 @@ public class MaquinaEstadosTicket {
         registrar(ticket, null, ticket.getEstado(), ticket.getSolicitante(), null, ticket.getCreadoEn());
     }
 
+    /**
+     * Reasignación por un ADMIN (RF-06): cambia el técnico sin cambiar el estado,
+     * así que el renglón del historial repite el estado y explica el motivo.
+     */
+    public void registrarReasignacion(Ticket ticket, Usuario autor, String motivo) {
+        registrar(ticket, ticket.getEstado(), ticket.getEstado(), autor, motivo, Instant.now(clock));
+    }
+
     static void validar(EstadoTicket actual, EstadoTicket nuevo) {
         if (actual == nuevo) {
             throw new TransicionNoPermitidaException(actual, nuevo,

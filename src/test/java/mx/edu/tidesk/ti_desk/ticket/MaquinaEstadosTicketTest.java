@@ -157,4 +157,19 @@ class MaquinaEstadosTicketTest {
         ticket.setEstado(estado);
         return ticket;
     }
+
+    @Test
+    void registrarReasignacionRepiteElEstadoYGuardaElMotivo() {
+        Ticket ticket = ticketEn(EstadoTicket.EN_PROCESO);
+
+        maquina.registrarReasignacion(ticket, tecnico, "Cambio de turno");
+
+        ArgumentCaptor<HistorialEstado> captor = ArgumentCaptor.forClass(HistorialEstado.class);
+        verify(historial).save(captor.capture());
+        assertThat(captor.getValue().getEstadoAnterior()).isEqualTo(EstadoTicket.EN_PROCESO);
+        assertThat(captor.getValue().getEstadoNuevo()).isEqualTo(EstadoTicket.EN_PROCESO);
+        assertThat(captor.getValue().getMotivo()).isEqualTo("Cambio de turno");
+        assertThat(captor.getValue().getFecha()).isEqualTo(AHORA);
+        assertThat(ticket.getEstado()).isEqualTo(EstadoTicket.EN_PROCESO);
+    }
 }

@@ -18,9 +18,11 @@ import java.util.Optional;
 import mx.edu.tidesk.ti_desk.activo.Activo;
 import mx.edu.tidesk.ti_desk.activo.ActivoRepository;
 import mx.edu.tidesk.ti_desk.comun.AccionNoPermitidaException;
+import mx.edu.tidesk.ti_desk.comun.ParametroInvalidoException;
 import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSla;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSlaRepository;
+import mx.edu.tidesk.ti_desk.ticket.dto.AsignarTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
@@ -277,6 +279,134 @@ class TicketServiceTest {
                 .isInstanceOf(AccionNoPermitidaException.class);
         verify(historial, never()).save(any());
         verify(tickets, never()).saveAndFlush(any());
+    }
+
+    // ---------- RF-06: asignación ----------
+
+    @Test
+    void elTecnicoSeAutoasignaUnTicketAbierto() {
+        Ticket ticket = visible(ticket(EstadoTicket.ABIERTO, null));
+        tecnicoActivo(3L);
+
+        TicketResponse respuesta = servicio.asignar(15L, null, 3L, Rol.TECNICO);
+
+        assertThat(respuesta.estado()).isEqualTo(EstadoTicket.ASIGNADO);
+        assertThat(respuesta.tecnicoId()).isEqualTo(3L);
+        assertThat(ticket.getAsignadoEn()).isEqualTo(AHORA);
+        ArgumentCaptor<HistorialEstado> captor = ArgumentCaptor.forClass(HistorialEstado.class);
+        verify(historial).save(captor.capture());
+        assertThat(captor.getValue().getEstadoAnterior()).isEqualTo(EstadoTicket.ABIERTO);
+        assertThat(captor.getValue().getEstadoNuevo()).isEqualTo(EstadoTicket.ASIGNADO);
+        verify(tickets).saveAndFlush(ticket);
+    }
+
+    @Test
+    void elAdminAsignaAUnTecnicoConMotivo() {
+        visible(ticket(EstadoTicket.ABIERTO, null));
+        tecnicoActivo(3L);
+
+        TicketResponse respuesta = servicio.asignar(15L,
+                new AsignarTicketRequest(3L, "  Es de redes  "), 1L, Rol.ADMIN);
+
+        assertThat(respuesta.tecnicoId()).isEqualTo(3L);
+        ArgumentCaptor<HistorialEstado> captor = ArgumentCaptor.forClass(HistorialEstado.class);
+        verify(historial).save(captor.capture());
+        assertThat(captor.getValue().getMotivo()).isEqualTo("Es de redes");
+        assertThat(captor.getValue().getUsuario().getId()).isEqualTo(1L);
+    }
+
+    @Test
+    void unUsuarioNoPuedeAsignar() {
+        assertThatThrownBy(() -> servicio.asignar(15L, new AsignarTicketRequest(3L, null), 7L, Rol.USUARIO))
+                .isInstanceOf(AccionNoPermitidaException.class);
+        verify(tickets, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void unTecnicoNoPuedeAsignarleElTicketAOtro() {
+        assertThatThrownBy(() -> servicio.asignar(15L, new AsignarTicketRequest(4L, null), 3L, Rol.TECNICO))
+                .isInstanceOf(AccionNoPermitidaException.class)
+                .hasMessageContaining("sí mismo");
+        verify(tickets, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void elAdminDebeIndicarElTecnico() {
+        assertThatThrownBy(() -> servicio.asignar(15L, new AsignarTicketRequest(null, null), 1L, Rol.ADMIN))
+                .isInstanceOf(ParametroInvalidoException.class)
+                .hasMessageContaining("tecnicoId");
+    }
+
+    @Test
+    void noSePuedeAsignarAQuienNoEsTecnicoActivo() {
+        visible(ticket(EstadoTicket.ABIERTO, null));
+        Usuario inactivo = usuario(3L);
+        inactivo.setRol(Rol.TECNICO);
+        inactivo.setActivo(false);
+        when(usuarios.findById(3L)).thenReturn(Optional.of(inactivo));
+        when(usuarios.findById(7L)).thenReturn(Optional.of(solicitante));
+
+        assertThatThrownBy(() -> servicio.asignar(15L, new AsignarTicketRequest(3L, null), 1L, Rol.ADMIN))
+                .isInstanceOf(ParametroInvalidoException.class);
+        assertThatThrownBy(() -> servicio.asignar(15L, new AsignarTicketRequest(7L, null), 1L, Rol.ADMIN))
+                .isInstanceOf(ParametroInvalidoException.class);
+        verify(tickets, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void unTecnicoNoPuedeTomarUnTicketYaAsignado() {
+        visible(ticket(EstadoTicket.ASIGNADO, 4L));
+        tecnicoActivo(3L);
+
+        assertThatThrownBy(() -> servicio.asignar(15L, null, 3L, Rol.TECNICO))
+                .isInstanceOf(TransicionNoPermitidaException.class)
+                .hasMessageContaining("solo un administrador puede reasignarlo");
+        verify(tickets, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void elAdminReasignaUnTicketEnProcesoSinCambiarSuEstado() {
+        Ticket ticket = visible(ticket(EstadoTicket.EN_PROCESO, 4L));
+        tecnicoActivo(3L);
+
+        TicketResponse respuesta = servicio.asignar(15L, new AsignarTicketRequest(3L, null), 1L, Rol.ADMIN);
+
+        assertThat(respuesta.tecnicoId()).isEqualTo(3L);
+        assertThat(respuesta.estado()).isEqualTo(EstadoTicket.EN_PROCESO);
+        ArgumentCaptor<HistorialEstado> captor = ArgumentCaptor.forClass(HistorialEstado.class);
+        verify(historial).save(captor.capture());
+        assertThat(captor.getValue().getEstadoAnterior()).isEqualTo(EstadoTicket.EN_PROCESO);
+        assertThat(captor.getValue().getEstadoNuevo()).isEqualTo(EstadoTicket.EN_PROCESO);
+        assertThat(captor.getValue().getMotivo()).isEqualTo("Reasignado a otro técnico");
+        verify(tickets).saveAndFlush(ticket);
+    }
+
+    @Test
+    void reasignarAlMismoTecnicoSeRechaza() {
+        visible(ticket(EstadoTicket.ASIGNADO, 3L));
+        tecnicoActivo(3L);
+
+        assertThatThrownBy(() -> servicio.asignar(15L, new AsignarTicketRequest(3L, null), 1L, Rol.ADMIN))
+                .isInstanceOf(TransicionNoPermitidaException.class)
+                .hasMessageContaining("ya está asignado a ese técnico");
+    }
+
+    @ParameterizedTest
+    @CsvSource({"RESUELTO", "CERRADO", "CANCELADO"})
+    void unTicketTerminadoYaNoSeAsigna(EstadoTicket estado) {
+        visible(ticket(estado, 4L));
+        tecnicoActivo(3L);
+
+        assertThatThrownBy(() -> servicio.asignar(15L, new AsignarTicketRequest(3L, null), 1L, Rol.ADMIN))
+                .isInstanceOf(TransicionNoPermitidaException.class)
+                .hasMessageContaining("ya no se puede asignar");
+        verify(tickets, never()).saveAndFlush(any());
+    }
+
+    private void tecnicoActivo(Long id) {
+        Usuario tecnico = usuario(id);
+        tecnico.setRol(Rol.TECNICO);
+        when(usuarios.findById(id)).thenReturn(Optional.of(tecnico));
     }
 
     @SuppressWarnings("unchecked")

@@ -20,6 +20,7 @@ import java.util.List;
 import mx.edu.tidesk.ti_desk.comun.AccionNoPermitidaException;
 import mx.edu.tidesk.ti_desk.comun.ManejadorErrores;
 import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
+import mx.edu.tidesk.ti_desk.ticket.dto.AsignarTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
@@ -292,6 +293,78 @@ class TicketControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verify(ticketService, never()).cambiarEstado(any(), any(), any(), any());
+    }
+
+    // ---------- RF-06: asignación ----------
+
+    @Test
+    @WithMockCustomUser(id = 3, rol = Rol.TECNICO)
+    void unTecnicoSeAutoasignaSinCuerpo() throws Exception {
+        when(ticketService.asignar(eq(15L), any(), eq(3L), eq(Rol.TECNICO)))
+                .thenReturn(ticketEn(EstadoTicket.ASIGNADO));
+
+        mvc.perform(patch("/api/v1/tickets/15/asignacion"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("ASIGNADO"))
+                .andExpect(jsonPath("$.tecnicoId").value(3));
+
+        verify(ticketService).asignar(eq(15L), eq(null), eq(3L), eq(Rol.TECNICO));
+    }
+
+    @Test
+    @WithMockCustomUser(id = 1, rol = Rol.ADMIN)
+    void elAdminAsignaIndicandoElTecnico() throws Exception {
+        when(ticketService.asignar(eq(15L), any(AsignarTicketRequest.class), eq(1L), eq(Rol.ADMIN)))
+                .thenReturn(ticketEn(EstadoTicket.ASIGNADO));
+
+        mvc.perform(patch("/api/v1/tickets/15/asignacion").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tecnicoId\":3}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<AsignarTicketRequest> captor = ArgumentCaptor.forClass(AsignarTicketRequest.class);
+        verify(ticketService).asignar(eq(15L), captor.capture(), eq(1L), eq(Rol.ADMIN));
+        assertThat(captor.getValue().tecnicoId()).isEqualTo(3L);
+    }
+
+    @Test
+    @WithMockCustomUser(id = 1, rol = Rol.ADMIN)
+    void asignarConTecnicoNegativoResponde400() throws Exception {
+        mvc.perform(patch("/api/v1/tickets/15/asignacion").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tecnicoId\":-1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.tecnicoId").exists());
+
+        verify(ticketService, never()).asignar(any(), any(), any(), any());
+    }
+
+    @Test
+    void asignarComoUsuarioResponde403() throws Exception {
+        when(ticketService.asignar(eq(15L), any(), any(), any()))
+                .thenThrow(new AccionNoPermitidaException("Solo un técnico o un administrador pueden asignar tickets."));
+
+        mvc.perform(patch("/api/v1/tickets/15/asignacion").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tecnicoId\":3}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockCustomUser(id = 4, rol = Rol.TECNICO)
+    void dosTecnicosAlMismoTiempoElSegundoRecibe409() throws Exception {
+        when(ticketService.asignar(eq(15L), any(), eq(4L), eq(Rol.TECNICO)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Ticket.class, 15L));
+
+        mvc.perform(patch("/api/v1/tickets/15/asignacion"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Modificación concurrente"));
+    }
+
+    @Test
+    @WithAnonymousUser
+    void asignarSinTokenResponde401() throws Exception {
+        mvc.perform(patch("/api/v1/tickets/15/asignacion"))
+                .andExpect(status().isUnauthorized());
+
+        verify(ticketService, never()).asignar(any(), any(), any(), any());
     }
 
     private static TicketResponse ticketEn(EstadoTicket estado) {
