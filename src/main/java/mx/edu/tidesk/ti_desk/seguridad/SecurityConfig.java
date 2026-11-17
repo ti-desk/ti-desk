@@ -1,6 +1,8 @@
 package mx.edu.tidesk.ti_desk.seguridad;
 
 import mx.edu.tidesk.ti_desk.usuario.UsuarioRepository;
+import jakarta.servlet.DispatcherType;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -36,6 +38,9 @@ public class SecurityConfig {
                         .authenticationEntryPoint(problemas)
                         .accessDeniedHandler(problemas))
                 .authorizeHttpRequests(a -> a
+                        // El despacho de error (/error) no se vuelve a autenticar: sin esto,
+                        // un 404 o 405 de un usuario con token válido se convierte en 401.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
