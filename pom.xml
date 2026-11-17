@@ -48,10 +48,39 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc</artifactId>
 		</dependency>
-		<!-- NUEVO: Bean Validation (RF-04: 400 con detalle por campo) -->
+		<!-- Bean Validation (RF-04: 400 con detalle por campo) -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+				<!-- Seguridad (ADR-003) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<!-- JWT: gson como serializador porque Spring Boot 4 usa Jackson 3 -->
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-api</artifactId>
+			<version>0.13.0</version>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-impl</artifactId>
+			<version>0.13.0</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.jsonwebtoken</groupId>
+			<artifactId>jjwt-gson</artifactId>
+			<version>0.13.0</version>
+			<scope>runtime</scope>
+		</dependency>
+		<!-- Swagger / OpenAPI -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>3.0.3</version>
 		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
@@ -83,6 +112,11 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+				<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
 
 		<!-- NUEVO (QA, Sprint 1): pruebas de integración con PostgreSQL real vía Testcontainers.
 		     Versiones administradas por el BOM de Spring Boot. -->
@@ -111,6 +145,86 @@
 				<artifactId>spring-boot-maven-plugin</artifactId>
 			</plugin>
 
+			<!-- ======================================================= -->
+			<!-- MOCKITO COMO AGENTE (hallazgo H-05)                      -->
+			<!-- Java 21 avisa que la carga dinámica de agentes dejará de -->
+			<!-- funcionar. dependency:properties expone la ruta del jar  -->
+			<!-- de Mockito y Surefire lo carga con -javaagent.           -->
+			<!-- @{argLine} conserva el agente de JaCoCo.                 -->
+			<!-- ======================================================= -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>rutas-de-dependencias</id>
+						<goals>
+							<goal>properties</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<argLine>@{argLine} -javaagent:${org.mockito:mockito-core:jar} -Xshare:off</argLine>
+				</configuration>
+			</plugin>
+
+			<!-- ======================================================= -->
+			<!-- 				CONFIGURACIÓN DE SPOGBUGS				 -->
+			<!-- ======================================================= -->
+			<plugin>
+				<groupId>com.github.spotbugs</groupId>
+				<artifactId>spotbugs-maven-plugin</artifactId>
+				<version>4.8.3.1</version>
+				<configuration>
+					<effort>Max</effort>
+					<threshold>Medium</threshold>
+					<failOnError>true</failOnError>
+					<xmlOutput>true</xmlOutput>
+					<spotbugsXmlOutputDirectory>${project.build.directory}/spotbugs</spotbugsXmlOutputDirectory>
+					<excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile> <!-- Opcional: para mitigar falsos positivos -->
+				</configuration>
+				<executions>
+					<execution>
+						<id>analyze-spotbugs</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+
+			<!-- ======================================================= -->
+            <!--                CONFIGURACIÓN DE CHECKSTYLE              -->
+            <!-- ======================================================= -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-checkstyle-plugin</artifactId>
+                <version>3.3.1</version>
+                <configuration>
+                    <configLocation>google_checks.xml</configLocation>
+                    <consoleOutput>true</consoleOutput>
+                    <failsOnError>true</failsOnError>
+                    <failOnViolation>true</failOnViolation>
+                    <violationSeverity>error</violationSeverity>
+                    <includeTestSourceDirectory>false</includeTestSourceDirectory>
+                    <excludes>**/dto/**,**/config/**,**/entity/**</excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>validate-checkstyle</id>
+                        <phase>validate</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+			
 			<!-- ======================================================= -->
 			<!-- CONFIGURACIÓN DE JACOCO (QUALITY GATE 60% COBERTURA)     -->
 			<!-- ======================================================= -->
@@ -155,10 +269,9 @@
 								<exclude>**/dto/**</exclude>
 								<!-- NUEVO: la clase de arranque no cuenta para la cobertura -->
 								<exclude>**/*Application.class</exclude>
-								    <!-- Entidades JPA: solo datos (getters/setters), sin lógica de negocio -->
+								    <!-- Entidades JPA sin pruebas todavía: se quitan cuando entre la lógica de su módulo (acción A-02). Usuario ya no se excluye. -->
     								<exclude>**/ticket/Ticket.class</exclude>
     								<exclude>**/ticket/HistorialEstado.class</exclude>
-    								<exclude>**/usuario/Usuario.class</exclude>
    									<exclude>**/activo/Activo.class</exclude>
     								<exclude>**/sla/PoliticaSla.class</exclude>
     								<exclude>**/comentario/Comentario.class</exclude>
