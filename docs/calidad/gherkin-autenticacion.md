@@ -9,16 +9,28 @@
 | Revisión técnica | Sashi (módulo de seguridad) |
 | Requisitos | RF-01, RF-02, RF-03 (parcial) y RNF de seguridad |
 | Casos del plan de pruebas | CP-001 a CP-006, CP-008, CP-009, CP-041, CP-042, CP-044 |
-| Versión / fecha | 0.2 · 23/10/2026 |
-| Estado | Validado por el Product Owner; pendiente revisión técnica de Sashi |
+| Versión / fecha | 0.3 · 16/11/2026 |
+| Estado | Validado por el Product Owner; contrato de la API confirmado con Sashi (PR #45) |
 
 Convenciones: las respuestas de error usan `application/problem+json` (RFC 9457). El token JWT expira a los 30 minutos y solo lleva el identificador del usuario y la expiración; el rol y el estado activo se leen de la base de datos en cada petición (ADR-003).
+
+## Contrato de la API (confirmado con Sashi, PR #45)
+
+| Elemento | Definición |
+| :--- | :--- |
+| Campos del registro | `nombre`, `correo` y `contrasena` (sin ñ). No existe el campo `rol` |
+| Campos del login | `correo` y `contrasena` |
+| Respuesta del login | `{"token": "...", "tipo": "Bearer"}` |
+| Error 400 por validación | ProblemDetail con la propiedad `errores`: un objeto `campo → mensaje`, por ejemplo `errores.contrasena` |
+| Error 401 del login | Mismo mensaje para correo inexistente, contraseña incorrecta y cuenta desactivada |
+| Rutas públicas | `/api/v1/auth/**`, `/actuator/health`, `/swagger-ui.html`, `/swagger-ui/**` y `/v3/api-docs/**` |
+| `GET /api/v1/usuarios/me` | Todavía no existe (RF-03). Los escenarios que la necesitaban usan `GET /api/v1/tickets` (RF-05, PR #44) como ruta protegida |
 
 ## Reglas de negocio de registro (definidas por el Product Owner)
 
 | Regla | Definición |
 | :--- | :--- |
-| Contraseña válida | Mínimo 8 caracteres, con al menos una mayúscula, una minúscula, un número y un carácter especial (por ejemplo `#`, `$`, `@`, `!`) |
+| Contraseña válida | Mínimo 8 caracteres, con al menos una mayúscula, una minúscula, un número y un carácter especial (por ejemplo `#`, `$`, `@`, `!`). La implementación además limita a 72 caracteres ASCII (límite de BCrypt): por confirmar con Melissa (decisión 7) |
 | Correo institucional | Formato de correo válido **y** dominio `@unistmo.edu.mx`; cualquier otro dominio se rechaza con 400 y ProblemDetail |
 | Correo duplicado | 409 con ProblemDetail |
 | Rol por defecto | USUARIO; el cliente no puede elegirlo |
@@ -58,20 +70,20 @@ Característica: Registro de usuarios
   Esquema del escenario: Registro con campos vacíos o formato de correo inválido
     Cuando envío POST /api/v1/auth/registro con nombre "<nombre>", correo "<correo>" y contraseña "<contraseña>"
     Entonces la respuesta tiene código 400
-    Y el cuerpo es un ProblemDetail con el detalle del campo "<campo>"
+    Y el cuerpo es un ProblemDetail con el detalle del campo "<campo>" dentro de "errores"
 
     Ejemplos:
       | nombre     | correo                   | contraseña  | campo      |
       |            | ana.lopez@unistmo.edu.mx | Segura#2026 | nombre     |
       | Ana López  |                          | Segura#2026 | correo     |
       | Ana López  | correo-sin-arroba        | Segura#2026 | correo     |
-      | Ana López  | ana.lopez@unistmo.edu.mx |             | contraseña |
+      | Ana López  | ana.lopez@unistmo.edu.mx |             | contrasena |
 
   @CP-003 @rebanada
   Esquema del escenario: Registro con un dominio de correo no institucional
     Cuando envío POST /api/v1/auth/registro con correo "<correo>" y una contraseña válida
     Entonces la respuesta tiene código 400
-    Y el cuerpo es un ProblemDetail con el detalle del campo "correo"
+    Y el cuerpo es un ProblemDetail con el detalle del campo "correo" dentro de "errores"
     Y no se crea ningún usuario
 
     Ejemplos:
@@ -84,7 +96,7 @@ Característica: Registro de usuarios
   Esquema del escenario: Registro con una contraseña que no cumple la política
     Cuando envío POST /api/v1/auth/registro con un correo institucional válido y contraseña "<contraseña>"
     Entonces la respuesta tiene código 400
-    Y el cuerpo es un ProblemDetail con el detalle del campo "contraseña"
+    Y el cuerpo es un ProblemDetail con el detalle del campo "contrasena" dentro de "errores"
     Y no se crea ningún usuario
 
     Ejemplos:
@@ -94,6 +106,7 @@ Característica: Registro de usuarios
       | SINMINUSCULA#1 | sin minúscula          |
       | SinNumero#abc  | sin número             |
       | SinSimbolo2026 | sin carácter especial  |
+      | Contraseña#2026 | carácter fuera de ASCII (ñ), si se confirma la decisión 7 |
 
   @seguridad @integracion
   Escenario: El registro no permite elegir el rol
@@ -119,7 +132,7 @@ Característica: Inicio de sesión
   Escenario: Login con credenciales correctas
     Cuando envío POST /api/v1/auth/login con ese correo y esa contraseña
     Entonces la respuesta tiene código 200
-    Y la respuesta contiene un token JWT firmado
+    Y la respuesta contiene un token JWT firmado con tipo "Bearer"
     Y el token expira 30 minutos después de emitirse
     Y el token no contiene el rol del usuario
 
@@ -160,7 +173,7 @@ Característica: Protección de rutas
 
   @CP-006 @seguridad
   Esquema del escenario: Petición con un token no válido
-    Cuando envío GET /api/v1/usuarios/me con un token <situación>
+    Cuando envío GET /api/v1/tickets con un token <situación>
     Entonces la respuesta tiene código 401
     Y el cuerpo es un ProblemDetail
 
@@ -177,13 +190,13 @@ Característica: Protección de rutas
     Y el cuerpo tiene formato application/problem+json
 
     Ejemplos:
-      | método | ruta                          |
-      | GET    | /api/v1/usuarios/me           |
-      | GET    | /api/v1/usuarios              |
-      | POST   | /api/v1/tickets               |
-      | GET    | /api/v1/tickets               |
-      | GET    | /api/v1/activos               |
-      | GET    | /api/v1/dashboard/indicadores |
+      | método | ruta                          | disponible                   |
+      | POST   | /api/v1/tickets               | sí (PR #44)                  |
+      | GET    | /api/v1/tickets               | sí (PR #44)                  |
+      | GET    | /api/v1/usuarios/me           | pendiente (RF-03)            |
+      | GET    | /api/v1/usuarios              | pendiente (RF-03)            |
+      | GET    | /api/v1/activos               | pendiente (RF-13, Sprint 2)  |
+      | GET    | /api/v1/dashboard/indicadores | pendiente (RF-15, Sprint 4)  |
 
   @CP-041 @seguridad
   Esquema del escenario: Endpoints públicos
@@ -195,6 +208,8 @@ Característica: Protección de rutas
       | POST   | /api/v1/auth/registro |
       | POST   | /api/v1/auth/login    |
       | GET    | /actuator/health      |
+      | GET    | /v3/api-docs          |
+      | GET    | /swagger-ui.html      |
 
   @CP-008 @CP-042 @seguridad
   Esquema del escenario: Acceso con un rol sin permiso
@@ -229,7 +244,7 @@ Característica: Protección de rutas
   Escenario: Un usuario desactivado queda bloqueado con su token vigente
     Dado que inicié sesión y conservo mi token vigente
     Y un ADMIN desactiva mi cuenta
-    Cuando envío GET /api/v1/usuarios/me con el mismo token
+    Cuando envío GET /api/v1/tickets con el mismo token
     Entonces la respuesta tiene código 401
 ```
 
@@ -242,23 +257,25 @@ Característica: Protección de rutas
 | 1 | Correo duplicado: ¿409 o 400? | **Resuelto:** 409, según el backlog v1.1; el ajuste de redacción de CP-002 va en el plan de pruebas v1.1 (TID-15) |
 | 2 | Regla de contraseña válida | **Resuelto (Melissa, 23/10/2026):** mínimo 8 caracteres, con mayúscula, minúscula, número y carácter especial |
 | 3 | Dominio del correo institucional | **Resuelto (Melissa, 23/10/2026):** se valida `@unistmo.edu.mx` además del formato; otro dominio responde 400 con ProblemDetail |
-| 4 | ¿El filtro JWT responde 401 con token vigente de usuario desactivado? | **Abierto:** confirmar con Sashi (ADR-003, punto 5) |
-| 5 | Las listas de rutas de CP-041 y CP-042 son las del contrato v1 | **Abierto:** completarlas conforme existan los controladores |
+| 4 | ¿El filtro JWT responde 401 con token vigente de usuario desactivado? | **Resuelto (Sashi, PR #45):** sí, 401; lo cubre `JwtAuthenticationFilterTest.usuarioDesactivadoResponde401AunqueSuTokenSigaVigente` |
+| 5 | Las listas de rutas de CP-041 y CP-042 son las del contrato v1 | **Parcial:** las rutas de tickets existen (PR #44); `/usuarios/me`, `/usuarios`, `/activos` y `/dashboard` siguen pendientes, así que CP-008 y CP-042 no se pueden automatizar todavía |
+| 6 | Nombre del campo de la contraseña y formato del 400 | **Resuelto (Sashi, PR #45):** `contrasena` (sin ñ); el detalle por campo va en la propiedad `errores` |
+| 7 | La implementación acepta solo contraseñas de 8 a 72 caracteres ASCII; una contraseña con ñ o acentos se rechaza con 400 | **Abierto:** confirmar con Melissa si se acepta como regla de negocio o si hay que cambiar la validación |
 
 ## Trazabilidad
 
-| Escenario | Caso del plan | Requisito | Nivel de prueba |
-| :--- | :--- | :--- | :--- |
-| Registro válido | CP-001 | RF-01 | Integración |
-| Correo duplicado | CP-002 | RF-01 | Integración |
-| Campos vacíos, correo inválido, dominio no institucional y contraseña débil | CP-003 | RF-01 | Rebanada (`@WebMvcTest`) |
-| Login correcto | CP-004 | RF-02 | Integración |
-| Login incorrecto | CP-005 | RF-02 | Integración |
-| Token inválido | CP-006 | RF-02 | Seguridad |
-| Rol sin permiso | CP-008, CP-042 | RF-03 | Seguridad |
-| Usuario desactivado | CP-009 | RF-03 | Integración |
-| Rutas sin token | CP-041 | RNF seguridad | Seguridad |
-| Logs sin secretos | CP-044 | RNF seguridad | Seguridad |
+| Escenario | Caso del plan | Requisito | Nivel de prueba | Prueba automatizada (PR #45) |
+| :--- | :--- | :--- | :--- | :--- |
+| Registro válido | CP-001 | RF-01 | Integración | Rebanada (`AuthControllerTest`); integración pendiente (QA) |
+| Correo duplicado | CP-002 | RF-01 | Integración | Rebanada y unitaria (`UsuarioServiceTest`); integración pendiente (QA) |
+| Campos vacíos, correo inválido, dominio no institucional y contraseña débil | CP-003 | RF-01 | Rebanada (`@WebMvcTest`) | Sí: `AuthControllerTest` y `RegistroRequestTest` |
+| Login correcto | CP-004 | RF-02 | Integración | Unitaria (`AuthServiceTest`, `JwtServiceTest`); integración pendiente (QA) |
+| Login incorrecto | CP-005 | RF-02 | Integración | Unitaria (`AuthServiceTest`); integración pendiente (QA) |
+| Token inválido | CP-006 | RF-02 | Seguridad | Sí: `JwtAuthenticationFilterTest` (con rutas de prueba) |
+| Rol sin permiso | CP-008, CP-042 | RF-03 | Seguridad | Solo con rutas de prueba; faltan los endpoints de RF-03 |
+| Usuario desactivado | CP-009 | RF-03 | Integración | Unitaria (`AuthServiceTest`) y filtro (`JwtAuthenticationFilterTest`); integración pendiente (QA) |
+| Rutas sin token | CP-041 | RNF seguridad | Seguridad | Sí: `SecurityConfigTest` (con rutas de prueba); con rutas reales pendiente (QA) |
+| Logs sin secretos | CP-044 | RNF seguridad | Seguridad | Parcial: los DTO ocultan contraseña y token en `toString`; revisión de logs pendiente (QA) |
 
 Nota para Melissa: las reglas de contraseña y de dominio no estaban en el SRS ni en el anteproyecto; conviene reflejarlas en el backlog (criterios de aceptación de la historia de registro) y en la matriz de trazabilidad.
 
@@ -268,3 +285,4 @@ Nota para Melissa: las reglas de contraseña y de dominio no estaban en el SRS n
 | :--- | :--- | :--- | :--- |
 | 0.1 | 23/10/2026 | Brenda | Borrador inicial para validación de Melissa |
 | 0.2 | 23/10/2026 | Brenda | Se incorporan las reglas de contraseña y dominio definidas por Melissa; se agregan escenarios de dominio no institucional y contraseña débil; pendientes 1 a 3 resueltas |
+| 0.3 | 16/11/2026 | Brenda | Contrato confirmado con Sashi (PR #45): campo `contrasena`, propiedad `errores` y respuesta del login; los escenarios de `/usuarios/me` pasan a `GET /api/v1/tickets`; rutas con su disponibilidad y rutas públicas de Swagger; decisiones 4 y 6 resueltas, 5 parcial y 7 nueva (límite de 72 caracteres ASCII); trazabilidad con las pruebas del PR #45 |
