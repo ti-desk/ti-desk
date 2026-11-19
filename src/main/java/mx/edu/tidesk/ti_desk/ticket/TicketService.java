@@ -5,13 +5,17 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.EnumSet;
+import java.util.Set;
 
 import mx.edu.tidesk.ti_desk.activo.Activo;
 import mx.edu.tidesk.ti_desk.activo.ActivoRepository;
 import mx.edu.tidesk.ti_desk.comun.AccionNoPermitidaException;
+import mx.edu.tidesk.ti_desk.comun.ParametroInvalidoException;
 import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSla;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSlaRepository;
+import mx.edu.tidesk.ti_desk.ticket.dto.AsignarTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
@@ -30,6 +34,10 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class TicketService {
+
+    /** Estados en los que un ADMIN puede cambiar el técnico sin cambiar el estado. */
+    private static final Set<EstadoTicket> REASIGNABLES =
+            EnumSet.of(EstadoTicket.ASIGNADO, EstadoTicket.EN_PROCESO, EstadoTicket.EN_ESPERA);
 
     private final TicketRepository tickets;
     private final UsuarioRepository usuarios;
@@ -130,6 +138,81 @@ public class TicketService {
         maquinaEstados.cambiar(ticket, nuevo, usuarios.getReferenceById(usuarioId),
                 limpiar(datos.motivo()));
         // saveAndFlush: si otro usuario cambió el ticket, el @Version falla aquí y responde 409.
+        return TicketResponse.desde(tickets.saveAndFlush(ticket));
+    }
+
+    /**
+     * RF-06: asigna el ticket a un técnico.
+     *
+     * <ul>
+     *   <li>ADMIN: asigna a cualquier técnico activo, o reasigna un ticket en curso.</li>
+     *   <li>TÉCNICO: solo se autoasigna tickets ABIERTO.</li>
+     *   <li>USUARIO: 403.</li>
+     * </ul>
+     * Si dos técnicos toman el mismo ticket a la vez, el @Version hace que el
+     * segundo reciba 409 y el ticket se quede con el primero.
+     *
+     * <p>El ticket se busca por id y no con la visibilidad de RF-05: si otro técnico
+     * lo acaba de tomar, ya no sería visible y el que perdió recibiría 404 en vez de
+     * 409 (CP-019). El técnico ya ve todos los tickets sin asignar, así que responder
+     * "ya lo tomó otro técnico" no expone nada nuevo.
+     */
+    @Transactional
+    public TicketResponse asignar(Long ticketId, AsignarTicketRequest datos, Long usuarioId, Rol rol) {
+        if (rol == Rol.USUARIO) {
+            throw new AccionNoPermitidaException("Solo un técnico o un administrador pueden asignar tickets.");
+        }
+        Long pedido = datos != null ? datos.tecnicoId() : null;
+        String motivo = datos != null ? limpiar(datos.motivo()) : null;
+
+        Long tecnicoId;
+        if (rol == Rol.TECNICO) {
+            if (pedido != null && !pedido.equals(usuarioId)) {
+                throw new AccionNoPermitidaException("Un técnico solo puede asignarse tickets a sí mismo.");
+            }
+            tecnicoId = usuarioId;
+        } else {
+            if (pedido == null) {
+                throw new ParametroInvalidoException("Indica el técnico en 'tecnicoId'.");
+            }
+            tecnicoId = pedido;
+        }
+
+        Ticket ticket = tickets.findById(ticketId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No existe el ticket con id " + ticketId));
+        if (rol == Rol.TECNICO && ticket.getTecnico() != null
+                && !usuarioId.equals(ticket.getTecnico().getId())) {
+            throw new TransicionNoPermitidaException(ticket.getEstado(), EstadoTicket.ASIGNADO,
+                    "El ticket ya lo tomó otro técnico");
+        }
+        Usuario tecnico = usuarios.findById(tecnicoId)
+                .filter(u -> u.getRol() == Rol.TECNICO && u.isActivo())
+                .orElseThrow(() -> new ParametroInvalidoException(
+                        "El usuario " + tecnicoId + " no es un técnico activo."));
+        Usuario autor = usuarios.getReferenceById(usuarioId);
+        EstadoTicket actual = ticket.getEstado();
+
+        if (actual == EstadoTicket.ABIERTO) {
+            ticket.setTecnico(tecnico);
+            maquinaEstados.cambiar(ticket, EstadoTicket.ASIGNADO, autor, motivo);
+        } else if (REASIGNABLES.contains(actual)) {
+            if (rol != Rol.ADMIN) {
+                throw new TransicionNoPermitidaException(actual, EstadoTicket.ASIGNADO,
+                        "El ticket ya está asignado; solo un administrador puede reasignarlo");
+            }
+            if (ticket.getTecnico() != null && tecnicoId.equals(ticket.getTecnico().getId())) {
+                throw new TransicionNoPermitidaException(actual, EstadoTicket.ASIGNADO,
+                        "El ticket ya está asignado a ese técnico");
+            }
+            ticket.setTecnico(tecnico);
+            maquinaEstados.registrarReasignacion(ticket, autor,
+                    motivo != null ? motivo : "Reasignado a otro técnico");
+        } else {
+            throw new TransicionNoPermitidaException(actual, EstadoTicket.ASIGNADO,
+                    "Un ticket " + actual + " ya no se puede asignar");
+        }
+        // saveAndFlush: si otro técnico lo tomó al mismo tiempo, el @Version falla aquí y responde 409.
         return TicketResponse.desde(tickets.saveAndFlush(ticket));
     }
 

@@ -95,10 +95,10 @@ public class ManejadorErrores {
         return problema;
     }
 
-    /** 400: un parámetro tiene un valor no permitido, por ejemplo un campo de orden (RF-05). */
+    /** 400: un parámetro tiene un valor no permitido, por ejemplo un campo de orden (RF-05) o un técnico inválido (RF-06). */
     @ExceptionHandler(ParametroInvalidoException.class)
     public ProblemDetail parametroInvalido(ParametroInvalidoException ex) {
-        // El mensaje lo escribe TicketController: es texto fijo.
+        // El mensaje lo escriben TicketController o TicketService: es texto fijo (a lo más con un id numérico).
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problema.setTitle("Parámetro inválido");
         return problema;

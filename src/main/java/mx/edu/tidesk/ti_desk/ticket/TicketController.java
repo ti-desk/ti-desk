@@ -5,6 +5,7 @@ import java.util.Set;
 
 import jakarta.validation.Valid;
 import mx.edu.tidesk.ti_desk.comun.ParametroInvalidoException;
+import mx.edu.tidesk.ti_desk.ticket.dto.AsignarTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
@@ -85,6 +86,17 @@ public class TicketController {
     public TicketResponse cambiarEstado(@PathVariable Long id,
                                         @Valid @RequestBody CambiarEstadoRequest datos) {
         return ticketService.cambiarEstado(id, datos, usuarioActual.id(), usuarioActual.rol());
+    }
+
+    /**
+     * RF-06: asignar el ticket. El ADMIN manda {"tecnicoId": 3}; el TÉCNICO puede
+     * mandar el cuerpo vacío para autoasignarse. Responde 200 con el ticket asignado,
+     * 403 si el rol no puede asignar y 409 si ya lo tomó otro técnico.
+     */
+    @PatchMapping("/{id}/asignacion")
+    public TicketResponse asignar(@PathVariable Long id,
+                                  @Valid @RequestBody(required = false) AsignarTicketRequest datos) {
+        return ticketService.asignar(id, datos, usuarioActual.id(), usuarioActual.rol());
     }
 
     static Pageable paginacion(int page, int size, String sort) {
