@@ -285,7 +285,7 @@ class TicketServiceTest {
 
     @Test
     void elTecnicoSeAutoasignaUnTicketAbierto() {
-        Ticket ticket = visible(ticket(EstadoTicket.ABIERTO, null));
+        Ticket ticket = existente(ticket(EstadoTicket.ABIERTO, null));
         tecnicoActivo(3L);
 
         TicketResponse respuesta = servicio.asignar(15L, null, 3L, Rol.TECNICO);
@@ -302,7 +302,7 @@ class TicketServiceTest {
 
     @Test
     void elAdminAsignaAUnTecnicoConMotivo() {
-        visible(ticket(EstadoTicket.ABIERTO, null));
+        existente(ticket(EstadoTicket.ABIERTO, null));
         tecnicoActivo(3L);
 
         TicketResponse respuesta = servicio.asignar(15L,
@@ -339,7 +339,7 @@ class TicketServiceTest {
 
     @Test
     void noSePuedeAsignarAQuienNoEsTecnicoActivo() {
-        visible(ticket(EstadoTicket.ABIERTO, null));
+        existente(ticket(EstadoTicket.ABIERTO, null));
         Usuario inactivo = usuario(3L);
         inactivo.setRol(Rol.TECNICO);
         inactivo.setActivo(false);
@@ -353,20 +353,42 @@ class TicketServiceTest {
         verify(tickets, never()).saveAndFlush(any());
     }
 
+    @ParameterizedTest
+    @CsvSource({"ASIGNADO", "EN_PROCESO", "RESUELTO"})
+    void elTecnicoQuePierdeRecibe409YNo404(EstadoTicket estado) {
+        // CP-019: el ticket ya es de otro técnico, así que no pasaría la visibilidad de RF-05.
+        existente(ticket(estado, 4L));
+        tecnicoActivo(3L);
+
+        assertThatThrownBy(() -> servicio.asignar(15L, null, 3L, Rol.TECNICO))
+                .isInstanceOf(TransicionNoPermitidaException.class)
+                .hasMessageContaining("ya lo tomó otro técnico");
+        verify(tickets, never()).saveAndFlush(any());
+    }
+
     @Test
-    void unTecnicoNoPuedeTomarUnTicketYaAsignado() {
-        visible(ticket(EstadoTicket.ASIGNADO, 4L));
+    void unTecnicoNoPuedeVolverATomarSuPropioTicket() {
+        existente(ticket(EstadoTicket.ASIGNADO, 3L));
         tecnicoActivo(3L);
 
         assertThatThrownBy(() -> servicio.asignar(15L, null, 3L, Rol.TECNICO))
                 .isInstanceOf(TransicionNoPermitidaException.class)
                 .hasMessageContaining("solo un administrador puede reasignarlo");
+    }
+
+    @Test
+    void asignarUnTicketQueNoExisteResponde404() {
+        when(tickets.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.asignar(99L, null, 3L, Rol.TECNICO))
+                .isInstanceOf(RecursoNoEncontradoException.class)
+                .hasMessageContaining("ticket");
         verify(tickets, never()).saveAndFlush(any());
     }
 
     @Test
     void elAdminReasignaUnTicketEnProcesoSinCambiarSuEstado() {
-        Ticket ticket = visible(ticket(EstadoTicket.EN_PROCESO, 4L));
+        Ticket ticket = existente(ticket(EstadoTicket.EN_PROCESO, 4L));
         tecnicoActivo(3L);
 
         TicketResponse respuesta = servicio.asignar(15L, new AsignarTicketRequest(3L, null), 1L, Rol.ADMIN);
@@ -383,7 +405,7 @@ class TicketServiceTest {
 
     @Test
     void reasignarAlMismoTecnicoSeRechaza() {
-        visible(ticket(EstadoTicket.ASIGNADO, 3L));
+        existente(ticket(EstadoTicket.ASIGNADO, 3L));
         tecnicoActivo(3L);
 
         assertThatThrownBy(() -> servicio.asignar(15L, new AsignarTicketRequest(3L, null), 1L, Rol.ADMIN))
@@ -394,7 +416,7 @@ class TicketServiceTest {
     @ParameterizedTest
     @CsvSource({"RESUELTO", "CERRADO", "CANCELADO"})
     void unTicketTerminadoYaNoSeAsigna(EstadoTicket estado) {
-        visible(ticket(estado, 4L));
+        existente(ticket(estado, 4L));
         tecnicoActivo(3L);
 
         assertThatThrownBy(() -> servicio.asignar(15L, new AsignarTicketRequest(3L, null), 1L, Rol.ADMIN))
@@ -407,6 +429,11 @@ class TicketServiceTest {
         Usuario tecnico = usuario(id);
         tecnico.setRol(Rol.TECNICO);
         when(usuarios.findById(id)).thenReturn(Optional.of(tecnico));
+    }
+
+    private Ticket existente(Ticket ticket) {
+        when(tickets.findById(ticket.getId())).thenReturn(Optional.of(ticket));
+        return ticket;
     }
 
     @SuppressWarnings("unchecked")

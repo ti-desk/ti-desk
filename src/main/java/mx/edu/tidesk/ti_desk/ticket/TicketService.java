@@ -151,6 +151,11 @@ public class TicketService {
      * </ul>
      * Si dos técnicos toman el mismo ticket a la vez, el @Version hace que el
      * segundo reciba 409 y el ticket se quede con el primero.
+     *
+     * <p>El ticket se busca por id y no con la visibilidad de RF-05: si otro técnico
+     * lo acaba de tomar, ya no sería visible y el que perdió recibiría 404 en vez de
+     * 409 (CP-019). El técnico ya ve todos los tickets sin asignar, así que responder
+     * "ya lo tomó otro técnico" no expone nada nuevo.
      */
     @Transactional
     public TicketResponse asignar(Long ticketId, AsignarTicketRequest datos, Long usuarioId, Rol rol) {
@@ -173,7 +178,14 @@ public class TicketService {
             tecnicoId = pedido;
         }
 
-        Ticket ticket = buscarVisible(ticketId, usuarioId, rol);
+        Ticket ticket = tickets.findById(ticketId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No existe el ticket con id " + ticketId));
+        if (rol == Rol.TECNICO && ticket.getTecnico() != null
+                && !usuarioId.equals(ticket.getTecnico().getId())) {
+            throw new TransicionNoPermitidaException(ticket.getEstado(), EstadoTicket.ASIGNADO,
+                    "El ticket ya lo tomó otro técnico");
+        }
         Usuario tecnico = usuarios.findById(tecnicoId)
                 .filter(u -> u.getRol() == Rol.TECNICO && u.isActivo())
                 .orElseThrow(() -> new ParametroInvalidoException(
