@@ -5,6 +5,7 @@ import java.util.Set;
 
 import jakarta.validation.Valid;
 import mx.edu.tidesk.ti_desk.comun.ParametroInvalidoException;
+import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
@@ -15,6 +16,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -71,6 +74,17 @@ public class TicketController {
         FiltroTickets filtro = new FiltroTickets(estado, prioridad, tecnicoId, vencido);
         return ticketService.listar(filtro, paginacion(page, size, sort),
                 usuarioActual.id(), usuarioActual.rol());
+    }
+
+    /**
+     * RF-08: cambiar el estado del ticket. Responde 200 con el ticket actualizado,
+     * 403 si al usuario no le toca ese cambio y 409 si la transición no se permite.
+     * Ejemplo: PATCH /api/v1/tickets/15/estado  {"estado":"EN_PROCESO","motivo":"Reviso el switch"}
+     */
+    @PatchMapping("/{id}/estado")
+    public TicketResponse cambiarEstado(@PathVariable Long id,
+                                        @Valid @RequestBody CambiarEstadoRequest datos) {
+        return ticketService.cambiarEstado(id, datos, usuarioActual.id(), usuarioActual.rol());
     }
 
     static Pageable paginacion(int page, int size, String sort) {

@@ -7,6 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -16,8 +17,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.util.List;
 
+import mx.edu.tidesk.ti_desk.comun.AccionNoPermitidaException;
 import mx.edu.tidesk.ti_desk.comun.ManejadorErrores;
 import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
+import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
@@ -36,6 +39,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -204,6 +208,96 @@ class TicketControllerTest {
                 .andExpect(status().isOk());
 
         verify(ticketService).listar(any(), any(), eq(3L), eq(Rol.TECNICO));
+    }
+
+    // ---------- RF-08: cambio de estado ----------
+
+    @Test
+    @WithMockCustomUser(id = 3, rol = Rol.TECNICO)
+    void cambiarEstadoResponde200ConElTicketActualizado() throws Exception {
+        when(ticketService.cambiarEstado(eq(15L), any(CambiarEstadoRequest.class), eq(3L), eq(Rol.TECNICO)))
+                .thenReturn(ticketEn(EstadoTicket.EN_PROCESO));
+
+        mvc.perform(patch("/api/v1/tickets/15/estado").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"EN_PROCESO\",\"motivo\":\"Reviso el switch\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("EN_PROCESO"));
+
+        ArgumentCaptor<CambiarEstadoRequest> captor = ArgumentCaptor.forClass(CambiarEstadoRequest.class);
+        verify(ticketService).cambiarEstado(eq(15L), captor.capture(), eq(3L), eq(Rol.TECNICO));
+        assertThat(captor.getValue().motivo()).isEqualTo("Reviso el switch");
+    }
+
+    @Test
+    void cambiarEstadoNoPermitidoResponde409ConLaRegla() throws Exception {
+        when(ticketService.cambiarEstado(eq(15L), any(), any(), any()))
+                .thenThrow(new TransicionNoPermitidaException(EstadoTicket.ABIERTO, EstadoTicket.RESUELTO,
+                        "Desde ABIERTO solo se puede pasar a [ASIGNADO, CANCELADO]"));
+
+        mvc.perform(patch("/api/v1/tickets/15/estado").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"RESUELTO\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.detail").value("Desde ABIERTO solo se puede pasar a [ASIGNADO, CANCELADO]"))
+                .andExpect(jsonPath("$.estadoActual").value("ABIERTO"))
+                .andExpect(jsonPath("$.estadoSolicitado").value("RESUELTO"));
+    }
+
+    @Test
+    void cambiarEstadoSinPermisoResponde403() throws Exception {
+        when(ticketService.cambiarEstado(eq(15L), any(), any(), any()))
+                .thenThrow(new AccionNoPermitidaException("No tienes permiso para pasar este ticket a RESUELTO."));
+
+        mvc.perform(patch("/api/v1/tickets/15/estado").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"RESUELTO\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void cambiarEstadoConModificacionSimultaneaResponde409() throws Exception {
+        when(ticketService.cambiarEstado(eq(15L), any(), any(), any()))
+                .thenThrow(new ObjectOptimisticLockingFailureException(Ticket.class, 15L));
+
+        mvc.perform(patch("/api/v1/tickets/15/estado").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"EN_PROCESO\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Modificación concurrente"));
+    }
+
+    @Test
+    void cambiarEstadoSinEstadoResponde400() throws Exception {
+        mvc.perform(patch("/api/v1/tickets/15/estado").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\":\"sin estado\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errores.estado").exists());
+
+        verify(ticketService, never()).cambiarEstado(any(), any(), any(), any());
+    }
+
+    @Test
+    void cambiarEstadoConEstadoInexistenteResponde400() throws Exception {
+        mvc.perform(patch("/api/v1/tickets/15/estado").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"PERDIDO\"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(ticketService, never()).cambiarEstado(any(), any(), any(), any());
+    }
+
+    @Test
+    @WithAnonymousUser
+    void cambiarEstadoSinTokenResponde401() throws Exception {
+        mvc.perform(patch("/api/v1/tickets/15/estado").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"EN_PROCESO\"}"))
+                .andExpect(status().isUnauthorized());
+
+        verify(ticketService, never()).cambiarEstado(any(), any(), any(), any());
+    }
+
+    private static TicketResponse ticketEn(EstadoTicket estado) {
+        return new TicketResponse(15L, "TID-2026-00015", "No hay internet", "Laboratorio 3 sin red",
+                Categoria.RED, Prioridad.ALTA, estado, 7L, 3L, null,
+                Instant.parse("2026-11-12T10:00:00Z"), Instant.parse("2026-11-13T10:00:00Z"), false);
     }
 
     private static TicketResponse ticketDeEjemplo() {

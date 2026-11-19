@@ -17,9 +17,11 @@ import java.util.Optional;
 
 import mx.edu.tidesk.ti_desk.activo.Activo;
 import mx.edu.tidesk.ti_desk.activo.ActivoRepository;
+import mx.edu.tidesk.ti_desk.comun.AccionNoPermitidaException;
 import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSla;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSlaRepository;
+import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
@@ -31,6 +33,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -45,6 +48,7 @@ class TicketServiceTest {
     private ActivoRepository activos;
     private PoliticaSlaRepository politicas;
     private GeneradorFolio generadorFolio;
+    private HistorialEstadoRepository historial;
     private TicketService servicio;
     private Usuario solicitante;
 
@@ -55,8 +59,10 @@ class TicketServiceTest {
         activos = mock(ActivoRepository.class);
         politicas = mock(PoliticaSlaRepository.class);
         generadorFolio = mock(GeneradorFolio.class);
+        historial = mock(HistorialEstadoRepository.class);
+        Clock reloj = Clock.fixed(AHORA, ZoneOffset.UTC);
         servicio = new TicketService(tickets, usuarios, activos, politicas, generadorFolio,
-                Clock.fixed(AHORA, ZoneOffset.UTC));
+                new MaquinaEstadosTicket(historial, reloj), reloj);
 
         solicitante = new Usuario();
         solicitante.setId(7L);
@@ -67,6 +73,8 @@ class TicketServiceTest {
             t.setId(100L);
             return t;
         });
+        when(tickets.saveAndFlush(any(Ticket.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(usuarios.getReferenceById(any())).thenAnswer(inv -> usuario(inv.getArgument(0)));
         for (Prioridad p : Prioridad.values()) {
             when(politicas.findById(p)).thenReturn(Optional.of(politica(p)));
         }
@@ -167,5 +175,131 @@ class TicketServiceTest {
         assertThat(resultado.totalElementos()).isEqualTo(1);
         assertThat(resultado.pagina()).isZero();
         assertThat(resultado.tamano()).isEqualTo(20);
+    }
+
+    @Test
+    void crearDejaElPrimerRenglonEnElHistorial() {
+        servicio.crear(peticion(Prioridad.MEDIA, null), 7L);
+
+        ArgumentCaptor<HistorialEstado> captor = ArgumentCaptor.forClass(HistorialEstado.class);
+        verify(historial).save(captor.capture());
+        assertThat(captor.getValue().getEstadoAnterior()).isNull();
+        assertThat(captor.getValue().getEstadoNuevo()).isEqualTo(EstadoTicket.ABIERTO);
+    }
+
+    // ---------- RF-08: cambio de estado ----------
+
+    @Test
+    void elTecnicoAsignadoPoneElTicketEnProceso() {
+        Ticket ticket = visible(ticket(EstadoTicket.ASIGNADO, 3L));
+
+        TicketResponse respuesta = servicio.cambiarEstado(15L,
+                new CambiarEstadoRequest(EstadoTicket.EN_PROCESO, "  Reviso el switch  "), 3L, Rol.TECNICO);
+
+        assertThat(respuesta.estado()).isEqualTo(EstadoTicket.EN_PROCESO);
+        ArgumentCaptor<HistorialEstado> captor = ArgumentCaptor.forClass(HistorialEstado.class);
+        verify(historial).save(captor.capture());
+        assertThat(captor.getValue().getMotivo()).isEqualTo("Reviso el switch");
+        assertThat(captor.getValue().getUsuario().getId()).isEqualTo(3L);
+        verify(tickets).saveAndFlush(ticket);
+    }
+
+    @Test
+    void responde404SiElTicketNoExisteONoEsVisible() {
+        when(tickets.findOne(any(Specification.class))).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> servicio.cambiarEstado(99L,
+                new CambiarEstadoRequest(EstadoTicket.CANCELADO, null), 7L, Rol.USUARIO))
+                .isInstanceOf(RecursoNoEncontradoException.class)
+                .hasMessageContaining("ticket");
+    }
+
+    @Test
+    void pasarAAsignadoPorEsteEndpointSeRechazaConLaRegla() {
+        visible(ticket(EstadoTicket.ABIERTO, null));
+
+        assertThatThrownBy(() -> servicio.cambiarEstado(15L,
+                new CambiarEstadoRequest(EstadoTicket.ASIGNADO, null), 1L, Rol.ADMIN))
+                .isInstanceOf(TransicionNoPermitidaException.class)
+                .hasMessageContaining("/asignacion");
+        verify(tickets, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void unaTransicionNoPermitidaNoGuardaNada() {
+        visible(ticket(EstadoTicket.ABIERTO, null));
+
+        assertThatThrownBy(() -> servicio.cambiarEstado(15L,
+                new CambiarEstadoRequest(EstadoTicket.RESUELTO, null), 1L, Rol.ADMIN))
+                .isInstanceOf(TransicionNoPermitidaException.class);
+        verify(historial, never()).save(any());
+        verify(tickets, never()).saveAndFlush(any());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            // estado actual, nuevo, usuario, rol, técnico asignado (vacío = sin técnico), ¿permitido?
+            "ABIERTO,    CANCELADO,  7, USUARIO, ,  true",
+            "ABIERTO,    CANCELADO,  8, USUARIO, ,  false",
+            "ABIERTO,    CANCELADO,  3, TECNICO, ,  true",
+            "ASIGNADO,   CANCELADO,  4, TECNICO, 3, false",
+            "ASIGNADO,   EN_PROCESO, 3, TECNICO, 3, true",
+            "ASIGNADO,   EN_PROCESO, 4, TECNICO, 3, false",
+            "ASIGNADO,   EN_PROCESO, 7, USUARIO, 3, false",
+            "EN_PROCESO, RESUELTO,   3, TECNICO, 3, true",
+            "EN_PROCESO, RESUELTO,   7, USUARIO, 3, false",
+            "EN_PROCESO, EN_ESPERA,  3, TECNICO, 3, true",
+            "EN_ESPERA,  EN_PROCESO, 7, USUARIO, 3, true",
+            "RESUELTO,   CERRADO,    7, USUARIO, 3, true",
+            "RESUELTO,   CERRADO,    3, TECNICO, 3, false",
+            "RESUELTO,   EN_PROCESO, 7, USUARIO, 3, true",
+            "EN_PROCESO, RESUELTO,   1, ADMIN,   3, true"
+    })
+    void soloQuienLeTocaPuedeHacerCadaCambio(EstadoTicket actual, EstadoTicket nuevo, Long usuarioId,
+                                             Rol rol, Long tecnicoId, boolean permitido) {
+        Ticket ticket = ticket(actual, tecnicoId);
+
+        if (permitido) {
+            TicketService.verificarPermiso(ticket, nuevo, usuarioId, rol);
+        } else {
+            assertThatThrownBy(() -> TicketService.verificarPermiso(ticket, nuevo, usuarioId, rol))
+                    .isInstanceOf(AccionNoPermitidaException.class)
+                    .hasMessageContaining(nuevo.name());
+        }
+    }
+
+    @Test
+    void unUsuarioSinPermisoRecibe403YNoSeGuardaNada() {
+        visible(ticket(EstadoTicket.EN_PROCESO, 3L));
+
+        assertThatThrownBy(() -> servicio.cambiarEstado(15L,
+                new CambiarEstadoRequest(EstadoTicket.RESUELTO, null), 7L, Rol.USUARIO))
+                .isInstanceOf(AccionNoPermitidaException.class);
+        verify(historial, never()).save(any());
+        verify(tickets, never()).saveAndFlush(any());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Ticket visible(Ticket ticket) {
+        when(tickets.findOne(any(Specification.class))).thenReturn(Optional.of(ticket));
+        return ticket;
+    }
+
+    private Ticket ticket(EstadoTicket estado, Long tecnicoId) {
+        Ticket ticket = new Ticket();
+        ticket.setId(15L);
+        ticket.setFolio("TID-2026-00015");
+        ticket.setEstado(estado);
+        ticket.setSolicitante(solicitante);
+        if (tecnicoId != null) {
+            ticket.setTecnico(usuario(tecnicoId));
+        }
+        return ticket;
+    }
+
+    private static Usuario usuario(Long id) {
+        Usuario u = new Usuario();
+        u.setId(id);
+        return u;
     }
 }
