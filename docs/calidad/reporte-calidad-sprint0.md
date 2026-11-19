@@ -48,7 +48,7 @@
 | #    | Gate                          | Umbral                                        | Estado al cierre del Sprint 0                                                                                            |
 | :--- | :---------------------------- | :-------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------- |
 | QG-1 | Compilación y pruebas        | 100 % en verde                                | Activo                                                                                                                   |
-| QG-2 | Cobertura de líneas (JaCoCo) | ≥ 60 % parcial; ≥ 80 % en servicios (final) | Activo al 60 %; se comprobó que el build falla por debajo del umbral (evidencia en el reporte del Sprint 1, sección 3) |
+| QG-2 | Cobertura de líneas (JaCoCo) | ≥ 60 % parcial; ≥ 80 % en servicios (final) | Activo al 60 %; se comprobó que el build falla por debajo del umbral (evidencia en el [reporte del Sprint 1](reporte-calidad-sprint1.md), sección 3.1) |
 | QG-3 | Análisis estático           | Sin bloqueantes ni críticos                  | Pendiente: herramienta decidida (ADR-004), configuración sin integrar                                                   |
 | QG-4 | Dependencias e imagen         | Sin vulnerabilidades críticas ni altas       | En curso (Dependabot, escaneo de secretos, Trivy)                                                                        |
 | QG-5 | Revisión de código          | ≥ 1 aprobación de otro integrante           | Activo (rama protegida)                                                                                                  |
@@ -109,7 +109,7 @@ Se adoptan SpotBugs (defectos probables) y Checkstyle (estilo) como plugins de M
 
 | Acción                                                          | Responsable                         | Origen                    |
 | :--------------------------------------------------------------- | :---------------------------------- | :------------------------ |
-| [completar: acción acordada en la retrospectiva del Sprint 0]   | [completar]                         | Retrospectiva             |
+| La minuta de la retrospectiva no registró una acción de mejora de calidad. Acción que adopta QA: ningún cambio entra a `main` sin PR (origen: commit `a725019`) | Brenda | Retrospectiva / QA |
 | Migrar las pruebas de integración a Testcontainers (H-02)       | Brenda                              | Hallazgo H-02             |
 | Completar la verificación de Docker en los 3 equipos pendientes | Brenda / Fernando / Yahir / Melissa | Verificación del entorno |
 
@@ -133,3 +133,4 @@ Se adoptan SpotBugs (defectos probables) y Checkstyle (estilo) como plugins de M
 | :------- | :--------- | :----- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 0.1      | 25/10/2026 | Brenda | Borrador con los datos disponibles del Sprint 0                                                                                                                                                |
 | 0.2      | 25/10/2026 | Brenda | Se confirmó que los 4 entregables de QA (PR #9, #11, #28 y #29) están integrados en`main`; se agregó la referencia a la evidencia del gate de cobertura y a la corrección de H-01 (PR #34) |
+| 0.3      | 16/11/2026 | Brenda | Se reemplaza el renglón de plantilla de la sección 9 y se enlaza la evidencia del gate de cobertura al reporte del Sprint 1 ya publicado |
