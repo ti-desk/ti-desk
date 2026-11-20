@@ -24,7 +24,10 @@ import mx.edu.tidesk.ti_desk.ticket.dto.AsignarTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
+import mx.edu.tidesk.ti_desk.ticket.dto.HistorialEstadoResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
+import mx.edu.tidesk.ti_desk.ticket.dto.TicketDetalleResponse;
+import mx.edu.tidesk.ti_desk.comentario.dto.ComentarioResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.TicketResponse;
 import mx.edu.tidesk.ti_desk.seguridad.JwtService;
 import mx.edu.tidesk.ti_desk.seguridad.ProblemDetailSeguridad;
@@ -293,6 +296,43 @@ class TicketControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verify(ticketService, never()).cambiarEstado(any(), any(), any(), any());
+    }
+
+    // ---------- Detalle ----------
+
+    @Test
+    void detalleResponde200ConTicketComentariosEHistorial() throws Exception {
+        when(ticketService.detalle(15L, 7L, Rol.USUARIO)).thenReturn(new TicketDetalleResponse(
+                ticketEn(EstadoTicket.ASIGNADO),
+                List.of(new ComentarioResponse(1L, 15L, 7L, "Ana", "Sigue sin red", false,
+                        Instant.parse("2026-11-12T11:00:00Z"))),
+                List.of(new HistorialEstadoResponse(null, EstadoTicket.ABIERTO,
+                        Instant.parse("2026-11-12T10:00:00Z"), null, 7L, "Ana"))));
+
+        mvc.perform(get("/api/v1/tickets/15"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ticket.folio").value("TID-2026-00015"))
+                .andExpect(jsonPath("$.comentarios[0].texto").value("Sigue sin red"))
+                .andExpect(jsonPath("$.historial[0].estadoNuevo").value("ABIERTO"));
+    }
+
+    @Test
+    void detalleDeTicketNoVisibleResponde404() throws Exception {
+        when(ticketService.detalle(99L, 7L, Rol.USUARIO))
+                .thenThrow(new RecursoNoEncontradoException("No existe el ticket con id 99"));
+
+        mvc.perform(get("/api/v1/tickets/99"))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    @WithAnonymousUser
+    void detalleSinTokenResponde401() throws Exception {
+        mvc.perform(get("/api/v1/tickets/15"))
+                .andExpect(status().isUnauthorized());
+
+        verify(ticketService, never()).detalle(any(), any(), any());
     }
 
     // ---------- RF-06: asignación ----------

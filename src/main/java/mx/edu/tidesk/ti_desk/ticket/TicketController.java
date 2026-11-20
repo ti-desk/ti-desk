@@ -10,6 +10,7 @@ import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
+import mx.edu.tidesk.ti_desk.ticket.dto.TicketDetalleResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.TicketResponse;
 import mx.edu.tidesk.ti_desk.usuario.UsuarioActual;
 import org.springframework.data.domain.PageRequest;
@@ -75,6 +76,14 @@ public class TicketController {
         FiltroTickets filtro = new FiltroTickets(estado, prioridad, tecnicoId, vencido);
         return ticketService.listar(filtro, paginacion(page, size, sort),
                 usuarioActual.id(), usuarioActual.rol());
+    }
+
+    /**
+     * Detalle del ticket con sus comentarios e historial. 404 si no existe o no es visible.
+     */
+    @GetMapping("/{id}")
+    public TicketDetalleResponse detalle(@PathVariable Long id) {
+        return ticketService.detalle(id, usuarioActual.id(), usuarioActual.rol());
     }
 
     /**
