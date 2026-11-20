@@ -180,9 +180,14 @@ class AutenticacionIntegracionTest extends IntegracionBaseTest {
     @Test
     void cp006TokenAlteradoResponde401() throws Exception {
         String token = tokenDe(registrarYEntrar());
-        // Se cambia el último carácter de la firma.
-        String alterado = token.substring(0, token.length() - 1)
-                + (token.endsWith("A") ? "B" : "A");
+        // Se cambia el PRIMER carácter de la firma. El último no sirve: en base64url
+        // sus 2 bits más bajos no se usan, y cambiar solo esos bits deja la misma
+        // firma (la prueba fallaba al azar, ~1 de cada 20 ejecuciones).
+        int inicioFirma = token.lastIndexOf('.') + 1;
+        char original = token.charAt(inicioFirma);
+        String alterado = token.substring(0, inicioFirma)
+                + (original == 'A' ? 'B' : 'A')
+                + token.substring(inicioFirma + 1);
 
         assertThat(get(RUTA_PROTEGIDA, alterado).statusCode()).isEqualTo(401);
     }
