@@ -5,17 +5,25 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.EnumSet;
+import java.util.Set;
 
 import mx.edu.tidesk.ti_desk.activo.Activo;
 import mx.edu.tidesk.ti_desk.activo.ActivoRepository;
+import mx.edu.tidesk.ti_desk.comentario.ComentarioRepository;
+import mx.edu.tidesk.ti_desk.comentario.dto.ComentarioResponse;
 import mx.edu.tidesk.ti_desk.comun.AccionNoPermitidaException;
+import mx.edu.tidesk.ti_desk.comun.ParametroInvalidoException;
 import mx.edu.tidesk.ti_desk.comun.RecursoNoEncontradoException;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSla;
 import mx.edu.tidesk.ti_desk.sla.PoliticaSlaRepository;
+import mx.edu.tidesk.ti_desk.ticket.dto.AsignarTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
+import mx.edu.tidesk.ti_desk.ticket.dto.HistorialEstadoResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
+import mx.edu.tidesk.ti_desk.ticket.dto.TicketDetalleResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.TicketResponse;
 import mx.edu.tidesk.ti_desk.usuario.Rol;
 import mx.edu.tidesk.ti_desk.usuario.Usuario;
@@ -31,17 +39,24 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class TicketService {
 
+    /** Estados en los que un ADMIN puede cambiar el técnico sin cambiar el estado. */
+    private static final Set<EstadoTicket> REASIGNABLES =
+            EnumSet.of(EstadoTicket.ASIGNADO, EstadoTicket.EN_PROCESO, EstadoTicket.EN_ESPERA);
+
     private final TicketRepository tickets;
     private final UsuarioRepository usuarios;
     private final ActivoRepository activos;
     private final PoliticaSlaRepository politicas;
     private final GeneradorFolio generadorFolio;
     private final MaquinaEstadosTicket maquinaEstados;
+    private final ComentarioRepository comentarios;
+    private final HistorialEstadoRepository historial;
     private final Clock clock;
 
     public TicketService(TicketRepository tickets, UsuarioRepository usuarios,
                          ActivoRepository activos, PoliticaSlaRepository politicas,
                          GeneradorFolio generadorFolio, MaquinaEstadosTicket maquinaEstados,
+                         ComentarioRepository comentarios, HistorialEstadoRepository historial,
                          Clock clock) {
         this.tickets = tickets;
         this.usuarios = usuarios;
@@ -49,6 +64,8 @@ public class TicketService {
         this.politicas = politicas;
         this.generadorFolio = generadorFolio;
         this.maquinaEstados = maquinaEstados;
+        this.comentarios = comentarios;
+        this.historial = historial;
         this.clock = clock;
     }
 
@@ -106,6 +123,21 @@ public class TicketService {
     }
 
     /**
+     * Detalle del ticket con sus comentarios e historial. Un USUARIO no ve los
+     * comentarios internos. Son tres consultas fijas, sin importar cuántos haya.
+     */
+    @Transactional(readOnly = true)
+    public TicketDetalleResponse detalle(Long ticketId, Long usuarioId, Rol rol) {
+        Ticket ticket = buscarVisible(ticketId, usuarioId, rol);
+        return new TicketDetalleResponse(
+                TicketResponse.desde(ticket),
+                comentarios.findDelTicket(ticketId, rol != Rol.USUARIO).stream()
+                        .map(ComentarioResponse::desde).toList(),
+                historial.findDelTicket(ticketId).stream()
+                        .map(HistorialEstadoResponse::desde).toList());
+    }
+
+    /**
      * RF-08: cambia el estado del ticket según la máquina de estados y deja el
      * cambio en el historial. Para pasar a ASIGNADO se usa la asignación (RF-06).
      *
@@ -134,9 +166,87 @@ public class TicketService {
     }
 
     /**
-     * Busca el ticket aplicando la misma visibilidad por rol que el listado (RF-05).
+     * RF-06: asigna el ticket a un técnico.
+     *
+     * <ul>
+     *   <li>ADMIN: asigna a cualquier técnico activo, o reasigna un ticket en curso.</li>
+     *   <li>TÉCNICO: solo se autoasigna tickets ABIERTO.</li>
+     *   <li>USUARIO: 403.</li>
+     * </ul>
+     * Si dos técnicos toman el mismo ticket a la vez, el @Version hace que el
+     * segundo reciba 409 y el ticket se quede con el primero.
+     *
+     * <p>El ticket se busca por id y no con la visibilidad de RF-05: si otro técnico
+     * lo acaba de tomar, ya no sería visible y el que perdió recibiría 404 en vez de
+     * 409 (CP-019). El técnico ya ve todos los tickets sin asignar, así que responder
+     * "ya lo tomó otro técnico" no expone nada nuevo.
      */
-    private Ticket buscarVisible(Long ticketId, Long usuarioId, Rol rol) {
+    @Transactional
+    public TicketResponse asignar(Long ticketId, AsignarTicketRequest datos, Long usuarioId, Rol rol) {
+        if (rol == Rol.USUARIO) {
+            throw new AccionNoPermitidaException("Solo un técnico o un administrador pueden asignar tickets.");
+        }
+        Long pedido = datos != null ? datos.tecnicoId() : null;
+        String motivo = datos != null ? limpiar(datos.motivo()) : null;
+
+        Long tecnicoId;
+        if (rol == Rol.TECNICO) {
+            if (pedido != null && !pedido.equals(usuarioId)) {
+                throw new AccionNoPermitidaException("Un técnico solo puede asignarse tickets a sí mismo.");
+            }
+            tecnicoId = usuarioId;
+        } else {
+            if (pedido == null) {
+                throw new ParametroInvalidoException("Indica el técnico en 'tecnicoId'.");
+            }
+            tecnicoId = pedido;
+        }
+
+        Ticket ticket = tickets.findById(ticketId)
+                .orElseThrow(() -> new RecursoNoEncontradoException(
+                        "No existe el ticket con id " + ticketId));
+        if (rol == Rol.TECNICO && ticket.getTecnico() != null
+                && !usuarioId.equals(ticket.getTecnico().getId())) {
+            throw new TransicionNoPermitidaException(ticket.getEstado(), EstadoTicket.ASIGNADO,
+                    "El ticket ya lo tomó otro técnico");
+        }
+        Usuario tecnico = usuarios.findById(tecnicoId)
+                .filter(u -> u.getRol() == Rol.TECNICO && u.isActivo())
+                .orElseThrow(() -> new ParametroInvalidoException(
+                        "El usuario " + tecnicoId + " no es un técnico activo."));
+        Usuario autor = usuarios.getReferenceById(usuarioId);
+        EstadoTicket actual = ticket.getEstado();
+
+        if (actual == EstadoTicket.ABIERTO) {
+            ticket.setTecnico(tecnico);
+            maquinaEstados.cambiar(ticket, EstadoTicket.ASIGNADO, autor, motivo);
+        } else if (REASIGNABLES.contains(actual)) {
+            if (rol != Rol.ADMIN) {
+                throw new TransicionNoPermitidaException(actual, EstadoTicket.ASIGNADO,
+                        "El ticket ya está asignado; solo un administrador puede reasignarlo");
+            }
+            if (ticket.getTecnico() != null && tecnicoId.equals(ticket.getTecnico().getId())) {
+                throw new TransicionNoPermitidaException(actual, EstadoTicket.ASIGNADO,
+                        "El ticket ya está asignado a ese técnico");
+            }
+            ticket.setTecnico(tecnico);
+            maquinaEstados.registrarReasignacion(ticket, autor,
+                    motivo != null ? motivo : "Reasignado a otro técnico");
+        } else {
+            throw new TransicionNoPermitidaException(actual, EstadoTicket.ASIGNADO,
+                    "Un ticket " + actual + " ya no se puede asignar");
+        }
+        // saveAndFlush: si otro técnico lo tomó al mismo tiempo, el @Version falla aquí y responde 409.
+        return TicketResponse.desde(tickets.saveAndFlush(ticket));
+    }
+
+    /**
+     * Busca el ticket aplicando la misma visibilidad por rol que el listado (RF-05).
+     * Si no existe o el usuario no lo puede ver, lanza 404 (no se revela que existe).
+     * Es pública para que otros servicios (comentarios) usen la misma regla.
+     */
+    @Transactional(readOnly = true)
+    public Ticket buscarVisible(Long ticketId, Long usuarioId, Rol rol) {
         Specification<Ticket> conId = (root, query, cb) -> cb.equal(root.get("id"), ticketId);
         return tickets.findOne(
                         TicketSpecifications.visiblesPara(FiltroTickets.sinFiltros(), usuarioId, rol).and(conId))

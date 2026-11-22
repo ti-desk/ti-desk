@@ -5,10 +5,12 @@ import java.util.Set;
 
 import jakarta.validation.Valid;
 import mx.edu.tidesk.ti_desk.comun.ParametroInvalidoException;
+import mx.edu.tidesk.ti_desk.ticket.dto.AsignarTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CambiarEstadoRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.CrearTicketRequest;
 import mx.edu.tidesk.ti_desk.ticket.dto.FiltroTickets;
 import mx.edu.tidesk.ti_desk.ticket.dto.PaginaResponse;
+import mx.edu.tidesk.ti_desk.ticket.dto.TicketDetalleResponse;
 import mx.edu.tidesk.ti_desk.ticket.dto.TicketResponse;
 import mx.edu.tidesk.ti_desk.usuario.UsuarioActual;
 import org.springframework.data.domain.PageRequest;
@@ -77,6 +79,14 @@ public class TicketController {
     }
 
     /**
+     * Detalle del ticket con sus comentarios e historial. 404 si no existe o no es visible.
+     */
+    @GetMapping("/{id}")
+    public TicketDetalleResponse detalle(@PathVariable Long id) {
+        return ticketService.detalle(id, usuarioActual.id(), usuarioActual.rol());
+    }
+
+    /**
      * RF-08: cambiar el estado del ticket. Responde 200 con el ticket actualizado,
      * 403 si al usuario no le toca ese cambio y 409 si la transición no se permite.
      * Ejemplo: PATCH /api/v1/tickets/15/estado  {"estado":"EN_PROCESO","motivo":"Reviso el switch"}
@@ -85,6 +95,17 @@ public class TicketController {
     public TicketResponse cambiarEstado(@PathVariable Long id,
                                         @Valid @RequestBody CambiarEstadoRequest datos) {
         return ticketService.cambiarEstado(id, datos, usuarioActual.id(), usuarioActual.rol());
+    }
+
+    /**
+     * RF-06: asignar el ticket. El ADMIN manda {"tecnicoId": 3}; el TÉCNICO puede
+     * mandar el cuerpo vacío para autoasignarse. Responde 200 con el ticket asignado,
+     * 403 si el rol no puede asignar y 409 si ya lo tomó otro técnico.
+     */
+    @PatchMapping("/{id}/asignacion")
+    public TicketResponse asignar(@PathVariable Long id,
+                                  @Valid @RequestBody(required = false) AsignarTicketRequest datos) {
+        return ticketService.asignar(id, datos, usuarioActual.id(), usuarioActual.rol());
     }
 
     static Pageable paginacion(int page, int size, String sort) {
