@@ -1,8 +1,8 @@
 package mx.edu.tidesk.ti_desk.activo;
 
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException; // <-- Nuevo import
-import org.springframework.http.HttpStatus; // <-- Nuevo import
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 import java.util.List;
 
 @Service
@@ -20,7 +20,6 @@ public class ActivoService {
 
     public Activo buscarPorId(Long id) {
         return activoRepository.findById(id)
-                // Cambiamos la excepción genérica por una que Spring entienda como 404
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Activo no encontrado"));
     }
 
