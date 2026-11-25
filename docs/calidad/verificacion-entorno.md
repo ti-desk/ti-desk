@@ -122,7 +122,7 @@ Ejecución con `main` actualizado (incluye TID-17) y con `docker compose down` p
 
 | ID | Hallazgo | Severidad | Acción sugerida | Responsable | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| H-01 | `docker-compose.yml` conserva `version: '3.8'`; Docker lo marca como obsoleto y lo ignora (confirmado por Brenda, Sashid y Ulises) | Baja | Eliminar la línea | Yahir | Abierto |
+| H-01 | `docker-compose.yml` conserva `version: '3.8'`; Docker lo marca como obsoleto y lo ignora (confirmado por Brenda, Sashid y Ulises) | Baja | Eliminar la línea | Yahir | Resuelto: PR #34 (TID-19) integrado en `main` el 25/10/2026 |
 | H-02 | Las pruebas actuales (`contextLoads`) necesitan PostgreSQL corriendo en `localhost:5432`; sin `docker compose up -d`, `mvnw verify` falla en local | Media | Migrar las pruebas de integración a Testcontainers en el Sprint 1 | Brenda | Resuelto: TID-17 integrado en `main`; `mvnw verify` pasa con el compose abajo (23/10/2026) |
 | H-03 | Flyway advertía "No migrations found" | Informativa | Se resuelve cuando Ulises agregue las migraciones V1..Vn | Ulises | Resuelto: V1 y V2 aplicadas en las ejecuciones de Brenda y Ulises |
 | H-04 | Maven reporta HTTP 401 al consultar los repositorios `flyway-community-db-support` y `MavenFeed`; no afecta el build (presente en los 3 equipos verificados) | Baja | Monitorear; no requiere acción inmediata | Yahir | En monitoreo |
@@ -150,3 +150,4 @@ Criterio de cierre: los 6 integrantes con ✅ en todos los criterios. Si alguien
 | 0.1 | 21/10/2026 | Brenda | Plantilla y resultado de referencia |
 | 0.2 | 22/10/2026 | Brenda | Resultados de Brenda, Ulises y Sashid; estado actualizado de los hallazgos H-01 a H-06 |
 | 0.3 | 23/10/2026 | Brenda | Procedimiento y resultados con Testcontainers (TID-17); H-02 resuelto; H-06 en verificación (1 de 6) |
+| 0.4 | 16/11/2026 | Brenda | H-01 marcado como resuelto (PR #34); H-06 sigue en verificación (1 de 6) |
