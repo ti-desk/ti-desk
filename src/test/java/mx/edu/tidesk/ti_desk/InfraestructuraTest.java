@@ -64,6 +64,15 @@ class InfraestructuraTest extends IntegracionBaseTest {
     }
 
     @Test
+    void sinPerfilDevNoSeCarganUsuariosDemo() {
+        // La semilla con contraseña conocida solo debe existir con el perfil dev (SemillaDesarrolloTest).
+        Integer demos = jdbc.queryForObject(
+                "SELECT count(*) FROM usuario WHERE email LIKE '%.demo@unistmo.edu.mx'", Integer.class);
+
+        assertThat(demos).isZero();
+    }
+
+    @Test
     void actuatorHealthResponde200ConEstadoUp() throws Exception {
         HttpResponse<String> respuesta = HttpClient.newHttpClient().send(
                 HttpRequest.newBuilder(URI.create("http://localhost:" + puerto + "/actuator/health")).build(),
