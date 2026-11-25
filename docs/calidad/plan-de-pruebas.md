@@ -8,7 +8,7 @@
 | Responsable      | Brenda (QA)                            |
 | Respaldo         | Yahir                                  |
 | Hito             | Release v0.5.0 (semana 8, parcial)     |
-| Versión / fecha | 1.1.1 · 16/Noviembre/2026                |
+| Versión / fecha | 1.1.2 · 20/Noviembre/2026                |
 | Estado           | Aprobado (PR #9 y #30)                |
 
 ---
@@ -179,7 +179,7 @@ Formato: **Dado / Cuando / Entonces**. Tipo: U = unitaria, S = de rebanada, I = 
 | CP-022        | RF-08 | Cada transición permitida de la máquina de estados                         | Cambia el estado y deja registro en historial                                            | U    |
 | CP-023        | RF-08 | Transición no permitida (por ejemplo ABIERTO → RESUELTO)                   | 409 con ProblemDetail que indica la regla                                                | U, I |
 | CP-024        | RF-08 | Estados finales (CERRADO, CANCELADO)                                         | No admiten ninguna transición                                                           | U    |
-| CP-025        | RF-08 | TECNICO que no tiene el ticket asignado intenta cambiar su estado            | 403                                                                                      | SEG  |
+| CP-025        | RF-08 | TECNICO que no tiene el ticket asignado intenta cambiar su estado            | 404 si el ticket es de otro técnico (oculto, regla 7.3); 403 si no tiene técnico         | SEG  |
 | CP-049        | RF-04 | (HU-04) Crear ticket con un activo que no existe                             | 404                                                                                      | I    |
 | CP-050        | RF-07 | (HU-07) USUARIO comenta un ticket ajeno                                      | 404 (oculto para el rol); el CP-016 cubre el detalle, este cubre el comentario           | SEG  |
 | Por confirmar | RF-04 | (HU-04) Crear ticket con un activo dado de baja                              | 409 (regla en confirmación con Ulises y Melisa; se asigna número de CP al confirmarla) | I    |
@@ -345,3 +345,4 @@ Al cierre de cada sprint, Brenda entrega un reporte breve con:
 | 1.0      | Oct 2026   | Brenda | Versión inicial                                                                                                                                                                                                                                                            |
 | 1.1      | 23/10/2026 | Brenda | Cruce con el backlog v1.1 y la matriz de trazabilidad: se agregan CP-049 a CP-057 y un caso por confirmar (HU-04, activo en BAJA); se corrige la redacción de CP-002, CP-025, CP-035 y CP-037; JaCoCo 0.8.15; QG-3 con SpotBugs y Checkstyle (ADR-004); nueva sección 7.7 |
 | 1.1.1    | 16/11/2026 | Brenda | Corrección del encabezado (tickets TID-07 y TID-15, estado Aprobado) y versión de JaCoCo 0.8.16 (Dependabot, PR #42); sin cambios de contenido |
+| 1.1.2    | 20/11/2026 | Brenda | CP-025: el resultado esperado se ajusta a la implementación de RF-08 (PR #69): 404 si el ticket es de otro técnico (oculto para el rol, regla 7.3 del anteproyecto) y 403 si no tiene técnico |

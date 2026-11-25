@@ -1,0 +1,6 @@
+# Perfil de desarrollo local: además de las migraciones normales, carga la
+# semilla de usuarios demo (db/seed-dev). No usar en el entorno desplegado.
+# Activar con la variable de entorno SPRING_PROFILES_ACTIVE=dev.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed-dev
